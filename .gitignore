@@ -12,3 +12,11 @@
 !/AusweisApp-community/docs/
 /AusweisApp-community/docs/*
 !/AusweisApp-community/docs/sdk/
+
+# Dart / Flutter
+.dart_tool/
+build/
+/pubspec.lock
+.flutter-plugins-dependencies
+.idea/
+*.iml
