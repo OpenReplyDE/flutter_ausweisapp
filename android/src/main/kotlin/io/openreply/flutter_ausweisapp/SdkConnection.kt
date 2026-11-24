@@ -102,6 +102,9 @@ internal class SdkConnection(
             sdk.transmit(sessionId, chars)
         } catch (e: RemoteException) {
             false
+        } catch (e: RuntimeException) {
+            // Passed back from the SDK process; its text is not forwarded.
+            false
         } finally {
             chars.fill('\u0000')
         }
@@ -119,6 +122,9 @@ internal class SdkConnection(
             sdk.updateNfcTag(sessionId, tag)
         } catch (e: RemoteException) {
             // A dead service is reported through the service connection.
+        } catch (e: RuntimeException) {
+            // Passed back from the SDK process. This runs in a Handler
+            // callback, where it would crash the app; the tag is dropped.
         }
     }
 
@@ -174,6 +180,10 @@ internal class SdkConnection(
         val accepted = try {
             sdk?.connectSdk(owner.callback) == true
         } catch (e: RemoteException) {
+            false
+        } catch (e: RuntimeException) {
+            // Passed back from the SDK process. This runs in a Handler
+            // callback, where it would crash the app; the start fails.
             false
         }
         if (!accepted) {

@@ -88,15 +88,18 @@ internal class NfcReaderMode(private val onTag: (Tag) -> Unit) {
         val adapter = adapter ?: return
         val wanted = sdkRunning && resumed
         if (wanted == enabled) return
-        enabled = wanted
-        try {
+        // Recorded only after the call succeeded, so that a failed enable is
+        // tried again on the next change.
+        enabled = try {
             if (wanted) {
                 adapter.enableReaderMode(activity, readerCallback, READER_FLAGS, null)
             } else {
                 adapter.disableReaderMode(activity)
             }
+            wanted
         } catch (e: IllegalStateException) {
             // The Activity is already destroyed; NFC dropped its reader mode.
+            false
         }
     }
 
