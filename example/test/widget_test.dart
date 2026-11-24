@@ -151,4 +151,30 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('an empty input field sends SET_PIN without a value', (
+    tester,
+  ) async {
+    final fake = await _pump(tester);
+    await _start(tester);
+
+    await _tap(tester, 'als PIN senden');
+
+    final set = fake.sent.singleWhere((c) => c['cmd'] == 'SET_PIN');
+    expect(set.containsKey('value'), isFalse);
+  });
+
+  testWidgets('an invalid URL sends nothing and logs a hint', (tester) async {
+    final fake = await _pump(tester);
+    await _start(tester);
+    await tester.enterText(
+      find.byKey(const Key('tcTokenUrlField')),
+      'ht!tp://',
+    );
+
+    await _tap(tester, 'Authentisierung starten');
+
+    expect(fake.sent.any((c) => c['cmd'] == 'RUN_AUTH'), isFalse);
+    expect(_inLog('Ungültige tcTokenURL'), findsOneWidget);
+  });
 }

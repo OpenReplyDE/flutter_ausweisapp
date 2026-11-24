@@ -108,6 +108,9 @@ class _TestScreenState extends State<TestScreen> {
       if (name.isNotEmpty) _addLog('Gesendet: $name');
     } on AusweisAppException catch (e) {
       _addLog('Fehler bei $name: $e');
+    } on Object catch (e) {
+      // Only the type: the message of an unexpected error could carry input.
+      _addLog('Unerwarteter Fehler bei $name: ${e.runtimeType}');
     }
   }
 
@@ -125,6 +128,22 @@ class _TestScreenState extends State<TestScreen> {
     });
   }
 
+  void _startAuthentication() {
+    final url = Uri.tryParse(_urlController.text.trim());
+    if (url == null || !url.isAbsolute || url.host.isEmpty) {
+      _addLog('Ungültige tcTokenURL: bitte eine absolute Adresse angeben.');
+      return;
+    }
+    _run(
+      'RUN_AUTH',
+      () => _eid.startAuthentication(
+        tcTokenUrl: url,
+        developerMode: _developerMode,
+        userInfoMessages: _nfcMessages,
+      ),
+    );
+  }
+
   void _setRight(String right, bool on) {
     setState(
       () => on ? _enabledRights.add(right) : _enabledRights.remove(right),
@@ -134,9 +153,11 @@ class _TestScreenState extends State<TestScreen> {
   }
 
   /// Sends the entered secret. The value is never written to the log.
-  void _sendSecret(String name, Future<void> Function(String value) send) {
+  /// An empty field sends the command without a value, as readers with a
+  /// keypad (such as the simulator) require.
+  void _sendSecret(String name, Future<void> Function(String? value) send) {
     final value = _secretController.text;
-    _run(name, () => send(value));
+    _run(name, () => send(value.isEmpty ? null : value));
   }
 
   Widget _button(String label, Future<void> Function() action, {String? name}) {
@@ -227,14 +248,9 @@ class _TestScreenState extends State<TestScreen> {
           onPressed: _useClientLink,
           child: const Text('Link übernehmen'),
         ),
-        _button(
-          'Authentisierung starten',
-          () => _eid.startAuthentication(
-            tcTokenUrl: Uri.parse(_urlController.text.trim()),
-            developerMode: _developerMode,
-            userInfoMessages: _nfcMessages,
-          ),
-          name: 'RUN_AUTH',
+        FilledButton.tonal(
+          onPressed: _startAuthentication,
+          child: const Text('Authentisierung starten'),
         ),
         _button(
           'PIN-Änderung starten',
@@ -252,7 +268,13 @@ class _TestScreenState extends State<TestScreen> {
         controller: _secretController,
         obscureText: true,
         keyboardType: TextInputType.number,
-        decoration: const InputDecoration(labelText: 'Eingabe'),
+        decoration: const InputDecoration(
+          labelText: 'Eingabe',
+          helperText:
+              'Leer lassen bei Kartenlesern mit eigener Tastatur '
+              '(Simulator-Karte)',
+          helperMaxLines: 2,
+        ),
       ),
       const SizedBox(height: 8),
       _wrap([
