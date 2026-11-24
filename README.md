@@ -39,22 +39,30 @@ final subscription = eid.events.listen((event) {
   switch (event) {
     case AuthenticationStarted():
       showProgress();
+    case AuthenticationStartFailed(:final error):
+      showStartError(error); // RUN_AUTH abgelehnt, etwa wegen der tcTokenURL
     case AccessRightsRequested(:final rights):
       showRights(rights); // danach eid.accept() oder eid.cancel()
     case InsertCardRequested():
       showCardHint();
     case PinRequested(:final reader):
+      eid.interrupt(); // schließt unter iOS den NFC-Dialog, siehe unten
       showPinScreen(reader.card?.retryCounter); // danach eid.setPin(...)
     case CanRequested():
+      eid.interrupt();
       showCanScreen(); // danach eid.setCan(...)
     case PukRequested():
+      eid.interrupt();
       showPukScreen(); // danach eid.setPuk(...)
     case NewPinRequested():
+      eid.interrupt();
       showNewPinScreen(); // danach eid.setNewPin(...)
     case Paused():
       showReposition(); // danach eid.continueWorkflow()
     case AuthenticationCompleted(:final result):
-      if (result.isSuccess) finishLogin(result.url);
+      // Die URL meldet das Ergebnis an den Dienst, auch einen Fehler.
+      if (result.url case final url?) openResultUrl(url);
+      showResult(result.isSuccess);
     case ChangePinCompleted(:final success):
       showPinChanged(success);
     default:
@@ -66,7 +74,7 @@ await eid.start();
 await eid.startAuthentication(tcTokenUrl: Uri.parse(tcTokenUrl));
 ```
 
-Die `showXyz`-Funktionen sind Platzhalter für Ihre eigenen Screens. `tcTokenUrl` ist die Adresse, die der eID-Server der Gegenstelle liefert. Kommt sie als eID-Client-Link (`…/eID-Client?tcTokenURL=…`) aus einem Web-Ablauf, liest `tcTokenUrlFromEidClientLink(Uri)` sie heraus und gibt `null` zurück, wenn der Link nicht passt oder die Adresse nicht mit `https` beginnt.
+Die `showXyz`-Funktionen und `openResultUrl` sind Platzhalter für Ihre eigenen Screens und Ihren eigenen Ablauf. Das SDK liefert am Ende einer Authentisierung in `result.url` eine Adresse, die die App aufrufen soll, und zwar bei Erfolg und bei einem Fehler: Über sie erfährt der Dienst das Ergebnis. `tcTokenUrl` ist die Adresse, die der eID-Server der Gegenstelle liefert. Kommt sie als eID-Client-Link (`…/eID-Client?tcTokenURL=…`) aus einem Web-Ablauf, liest `tcTokenUrlFromEidClientLink(Uri)` sie heraus und gibt `null` zurück, wenn der Link nicht passt oder die Adresse nicht mit `https` beginnt.
 
 Zum Aufräumen rufen Sie `await eid.stop()` und danach `eid.dispose()` auf. Weitere Möglichkeiten:
 
@@ -74,6 +82,14 @@ Zum Aufräumen rufen Sie `await eid.stop()` und danach `eid.dispose()` auf. Weit
 - `setAccessRights(...)` schränkt die optionalen Zugriffsrechte ein, `getCertificate()` liefert das Zertifikat der Gegenstelle.
 - `rawMessages` liefert jede Nachricht des SDK unverändert, `sendRaw(map)` sendet ein Kommando, das die typisierte API noch nicht kennt.
 - `logger:` im Konstruktor schreibt Kommandos und Nachrichten mit, siehe unten.
+
+### Der NFC-Dialog unter iOS und `interrupt()`
+
+Unter iOS zeigt das System einen eigenen NFC-Dialog, solange das SDK die Karte liest. Laut SDK-Dokumentation schließt das SDK diesen Dialog nicht von selbst, wenn es nach PIN, CAN, PUK oder neuer PIN fragt (`PinRequested`, `CanRequested`, `PukRequested`, `NewPinRequested`). Die App muss ihn dann mit `eid.interrupt()` schließen, bevor sie ihren Eingabe-Screen zeigt; sonst liegt der Dialog über diesem Screen. Unter Android sendet `interrupt()` nichts, der Aufruf kann also auf beiden Plattformen stehen.
+
+`interrupt()` ist nur direkt nach einem dieser vier Ereignisse erlaubt. Zu jedem anderen Zeitpunkt, etwa während `InsertCardRequested`, antwortet das SDK mit dem Ereignis `BadState`.
+
+Dass der Dialog offen bleibt und die App darunter nicht bedienbar ist, legt die SDK-Dokumentation nahe; auf einem echten iPhone ist es noch nicht bestätigt. Die erste iOS-Zeile in `docs/geraetetest.md` prüft genau das.
 
 ### Die App ohne Gerät testen
 
@@ -145,16 +161,18 @@ Besonderheiten unter Android:
 
 ## Lebenszyklus und Fehler
 
+- **Nur ein `AusweisApp` zur gleichen Zeit.** Das SDK existiert einmal pro Prozess. Zwei Objekte, die gleichzeitig arbeiten, werden nicht unterstützt. Ereignisse erhält immer das Objekt, das zuletzt `start()` aufgerufen hat. Der übliche Wechsel zwischen zwei Screens funktioniert trotzdem: Hat der neue Screen bei seinem `AusweisApp` schon `start()` aufgerufen, wenn der alte Screen `dispose()` aufruft, stoppt das alte Objekt das SDK des neuen nicht.
 - `start()` hat eine Frist von standardmäßig 15 Sekunden und wirft `AusweisAppStartException` (Codes `start_failed`, `timeout`, `api_level`). Der erste Schritt von `start()` stellt das API-Level 3 ein.
-- `stop()` wartet höchstens 15 Sekunden und wirft sonst `AusweisAppTransportException` (Code `timeout`).
-- `dispose()` löst das Stoppen aus, wartet aber nicht darauf. Legen Sie direkt danach ein neues `AusweisApp` an, rufen Sie vorher `await stop()` auf.
-- Kommandos bei nicht laufendem SDK werfen `AusweisAppNotRunningException`. Transportfehler beim Senden werfen `AusweisAppTransportException`.
+- `stop()` wartet höchstens 15 Sekunden und wirft sonst `AusweisAppTransportException` (Code `timeout`). Läuft noch ein Stoppen, zum Beispiel nach einem gescheiterten `start()`, wartet `stop()` auf dieses.
+- `dispose()` löst das Stoppen aus, wartet aber nicht darauf. Das ist für `State.dispose()` gedacht, das nicht warten kann. Ein neues `AusweisApp`, das danach startet, wartet selbst, bis dieses Stoppen beendet ist.
+- Kommandos bei nicht laufendem SDK werfen `AusweisAppNotRunningException`. Meldet das SDK selbst bei einem Kommando, dass es nicht läuft, wirft das Kommando ebenfalls `AusweisAppNotRunningException`; `isRunning` steht danach auf `false`, und `start()` startet das SDK neu. Transportfehler beim Senden werfen `AusweisAppTransportException`.
 - Fehlermeldungen des SDK (`BAD_STATE`, `INTERNAL_ERROR`, `INVALID`, `UNKNOWN_COMMAND`) kommen als Ereignisse an: `BadState`, `InternalError`, `InvalidCommand`, `UnknownCommand`. Nachrichten, die das Plugin nicht kennt, kommen als `UnknownMessageReceived` mit dem Roh-JSON.
 - Ein fachlich gescheiterter Ablauf (falsche PIN, Abbruch, gesperrte Karte) ist **keine** Ausnahme, sondern ein normales Ereignis, etwa `AuthenticationCompleted` mit einem Ergebnis, dessen `isSuccess` false ist.
 
 ## Umgang mit PIN, CAN und PUK
 
 - Das Plugin schreibt Kommandos mit Geheimnissen nie ins Log. Das Mitschreiben von Kommandos und Nachrichten ist standardmäßig aus (`logger:` im Konstruktor von `AusweisApp`). Wenn Sie es einschalten, ersetzt das Plugin PIN, CAN, PUK und die Werte von HTTP-Headern durch `***`.
+- Adressen ersetzt das Plugin im Log nicht: Die `tcTokenURL` im Kommando `RUN_AUTH` und die Ergebnis-Adresse in der Nachricht `AUTH` stehen im Klartext da. Beide enthalten in der Regel ein Sitzungs-Token. Das Mitschreiben ist deshalb nur für die Entwicklung gedacht; schalten Sie es in ausgelieferten Apps nicht ein.
 - Unter Android überschreibt das Plugin das Zeichenfeld nach dem Senden mit Nullen.
 - Bekannte Grenze: Die Eingabe wird in Flutter als Dart-String erfasst und lässt sich dort nicht gezielt aus dem Speicher löschen. Das gilt für jeden Flutter-Weg.
 

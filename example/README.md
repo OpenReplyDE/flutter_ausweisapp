@@ -31,6 +31,10 @@ Hinweis zum Bauen am 24.11.2026: Mit Flutter 3.41.7 und Xcode 27.2 schlägt `flu
 2. „Authentisierung starten" antippen, die Ereignisse erscheinen im Protokoll.
 3. PIN, CAN und PUK tragen Sie im Feld „Eingabe" ein und senden sie mit den vier Schaltflächen darunter.
 
+Unter iOS steht im Abschnitt „PIN, CAN, PUK" zusätzlich der Schalter „NFC-Dialog bei PIN-, CAN- und PUK-Abfrage automatisch schließen". Er ist voreingestellt an und sendet `INTERRUPT`, sobald das SDK nach PIN, CAN, PUK oder neuer PIN fragt. Laut SDK-Dokumentation bleibt der NFC-Dialog des Systems sonst offen und verdeckt die Eingabe; auf einem Gerät ist das noch nicht bestätigt. Mehr dazu steht im Abschnitt „Der NFC-Dialog unter iOS und `interrupt()`" der `README.md` des Plugins.
+
+Das Protokoll zeigt zu jedem Ereignis die wichtigsten Felder, etwa `retryCounter` oder das Ergebnis einer Authentisierung. Adressen zeigt es nicht, weil sie ein Sitzungs-Token enthalten können, sondern nur, ob eine vorhanden ist.
+
 Mit der Simulator-Karte des SDK (Schaltfläche „Simulator-Karte einlegen") läuft eine ganze Authentisierung ohne echten Ausweis. Lassen Sie dann das Feld „Eingabe" **leer** und tippen Sie „als PIN senden": Der Simulator meldet sich als Leser mit eigener Tastatur, und das SDK lehnt jede PIN mit Wert ab.
 
 ## Tests
