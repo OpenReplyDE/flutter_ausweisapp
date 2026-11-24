@@ -16,15 +16,21 @@ class MethodChannelAusweisAppTransport implements AusweisAppTransport {
   final StreamController<TransportEvent> _controller =
       StreamController<TransportEvent>.broadcast();
   StreamSubscription<dynamic>? _subscription;
+  Future<void>? _starting;
 
   @override
   Stream<TransportEvent> get events => _controller.stream;
 
   @override
-  Future<void> start() async {
-    if (_subscription != null) return;
+  Future<void> start() {
+    // Concurrent callers share one in-flight start. Native start is itself
+    // idempotent, so no "already started" state is kept here.
+    return _starting ??= _start().whenComplete(() => _starting = null);
+  }
+
+  Future<void> _start() async {
     // Subscribe first so no early message is lost.
-    _subscription = _eventChannel.receiveBroadcastStream().listen(
+    _subscription ??= _eventChannel.receiveBroadcastStream().listen(
       _onEvent,
       onError: _onError,
     );
@@ -65,6 +71,8 @@ class MethodChannelAusweisAppTransport implements AusweisAppTransport {
         if (json is String) _controller.add(TransportMessage(json));
       case 'disconnected':
         _controller.add(const TransportDisconnected());
+        // The native side is gone; allow a fresh start().
+        unawaited(_release());
     }
   }
 

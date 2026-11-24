@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,10 +64,53 @@ void main() {
     expect(calls, ['listen', 'start']);
   });
 
-  test('start is idempotent', () async {
-    await transport.start();
-    await transport.start();
+  test(
+    'sequential start subscribes once and re-invokes idempotent native start',
+    () async {
+      await transport.start();
+      await transport.start();
+      expect(calls, ['listen', 'start', 'start']);
+    },
+  );
+
+  test('concurrent start shares one in-flight native start', () async {
+    final gate = Completer<void>();
+    onCall = (_) => gate.future.then((_) => null);
+    var firstDone = false;
+    var secondDone = false;
+    final first = transport.start().then((_) => firstDone = true);
+    final second = transport.start().then((_) => secondDone = true);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(firstDone, isFalse);
+    expect(secondDone, isFalse);
+    gate.complete();
+    await Future.wait([first, second]);
     expect(calls, ['listen', 'start']);
+  });
+
+  test('start after disconnect subscribes and starts again', () async {
+    await transport.start();
+    final next = transport.events.first;
+    sink!.success({'type': 'disconnected'});
+    await next;
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, ['listen', 'start', 'cancel']);
+    await transport.start();
+    expect(calls, ['listen', 'start', 'cancel', 'listen', 'start']);
+  });
+
+  test('event channel error is forwarded as mapped exception', () async {
+    await transport.start();
+    final errors = <Object>[];
+    final sub = transport.events.listen((_) {}, onError: errors.add);
+    sink!.error(code: 'weird', message: 'native problem');
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(errors, hasLength(1));
+    final e = errors.single;
+    expect(e, isA<AusweisAppTransportException>());
+    expect((e as AusweisAppException).code, 'weird');
+    expect(e.message, 'native problem');
   });
 
   test('stop invokes stop and releases the event subscription', () async {
