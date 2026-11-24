@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_ausweisapp/testing.dart';
 import 'package:flutter_ausweisapp_example/main.dart';
@@ -124,6 +125,101 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_inLog('PinRequested'), findsOneWidget);
+  });
+
+  testWidgets('on iOS an ENTER_PIN message sends INTERRUPT while the '
+      'automatic closing is on', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final fake = await _pump(tester);
+      await _start(tester);
+      final toggle = tester.widget<SwitchListTile>(
+        find.byKey(const Key('autoInterruptSwitch')),
+      );
+      expect(toggle.value, isTrue);
+
+      fake.emit({'msg': 'ENTER_PIN', 'reader': _reader});
+      await tester.pumpAndSettle();
+
+      expect(fake.sent.where((c) => c['cmd'] == 'INTERRUPT'), hasLength(1));
+      expect(_inLog('Gesendet: INTERRUPT'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('on iOS an ENTER_PIN message sends no INTERRUPT while the '
+      'automatic closing is off', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final fake = await _pump(tester);
+      await _start(tester);
+      await tester.tap(find.byKey(const Key('autoInterruptSwitch')));
+      await tester.pumpAndSettle();
+
+      fake.emit({'msg': 'ENTER_PIN', 'reader': _reader});
+      await tester.pumpAndSettle();
+
+      expect(fake.sent.any((c) => c['cmd'] == 'INTERRUPT'), isFalse);
+      expect(_inLog('PinRequested'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('on Android an ENTER_PIN message sends no INTERRUPT and the '
+      'switch is hidden', (tester) async {
+    final fake = await _pump(tester);
+    await _start(tester);
+    expect(find.byKey(const Key('autoInterruptSwitch')), findsNothing);
+
+    fake.emit({'msg': 'ENTER_PIN', 'reader': _reader});
+    await tester.pumpAndSettle();
+
+    expect(fake.sent.any((c) => c['cmd'] == 'INTERRUPT'), isFalse);
+    expect(_inLog('INTERRUPT'), findsNothing);
+  });
+
+  testWidgets('the event log shows the main fields of an event, but no URL', (
+    tester,
+  ) async {
+    final fake = await _pump(tester);
+    await _start(tester);
+
+    fake.emit({
+      'msg': 'ENTER_PIN',
+      'error': 'You must provide 6 digits',
+      'reader': {
+        ..._reader,
+        'card': {'inoperative': false, 'deactivated': false, 'retryCounter': 2},
+      },
+    });
+    fake.emit({
+      'msg': 'AUTH',
+      'result': {
+        'major': 'http://www.bsi.bund.de/ecard/api/1.1/resultmajor#error',
+        'minor':
+            'http://www.bsi.bund.de/ecard/api/1.1/resultminor/sal'
+            '#cancellationByUser',
+        'reason': 'User_Cancelled',
+      },
+      'url': 'https://sp.example/refresh?sessionId=secret-session',
+    });
+    await tester.pumpAndSettle();
+
+    expect(
+      _inLog(
+        'Ereignis: PinRequested (Leser: Simulator, Karte: ja, '
+        'retryCounter: 2, error: You must provide 6 digits)',
+      ),
+      findsOneWidget,
+    );
+    expect(_inLog('isSuccess: false'), findsOneWidget);
+    expect(_inLog('#cancellationByUser'), findsOneWidget);
+    expect(_inLog('reason: User_Cancelled'), findsOneWidget);
+    expect(_inLog('URL: vorhanden'), findsOneWidget);
+    expect(_inLog('sp.example'), findsNothing);
+    expect(_inLog('secret-session'), findsNothing);
   });
 
   testWidgets('an eID client link fills the URL field', (tester) async {

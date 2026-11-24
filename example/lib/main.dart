@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
 
@@ -51,6 +52,7 @@ class _TestScreenState extends State<TestScreen> {
 
   bool _developerMode = true;
   bool _pluginLogging = false;
+  bool _autoInterrupt = true;
   String? _linkHint;
   List<String> _optionalRights = const [];
   Set<String> _enabledRights = {};
@@ -96,8 +98,22 @@ class _TestScreenState extends State<TestScreen> {
         setState(() {});
       default:
     }
-    _addLog('Ereignis: ${event.runtimeType}');
+    _addLog('Ereignis: ${_describe(event)}');
+    // By the SDK documentation, the iOS NFC dialog stays open after the SDK
+    // asks for input; INTERRUPT closes it so that the input can be made.
+    final asksForInput = switch (event) {
+      PinRequested() ||
+      CanRequested() ||
+      PukRequested() ||
+      NewPinRequested() => true,
+      _ => false,
+    };
+    if (asksForInput && _autoInterrupt && _isIos) {
+      _run('INTERRUPT (automatisch)', _eid.interrupt);
+    }
   }
+
+  static bool get _isIos => defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Runs [action]; a plugin error goes to the log instead of the zone.
   Future<void> _run(String name, Future<void> Function() action) async {
@@ -263,6 +279,18 @@ class _TestScreenState extends State<TestScreen> {
 
   Widget _buildSecretSection() {
     return _section('PIN, CAN, PUK', [
+      if (_isIos)
+        SwitchListTile(
+          key: const Key('autoInterruptSwitch'),
+          title: const Text(
+            'NFC-Dialog bei PIN-, CAN- und PUK-Abfrage automatisch schließen',
+          ),
+          subtitle: const Text(
+            'Sendet INTERRUPT, sobald das SDK eine Eingabe verlangt.',
+          ),
+          value: _autoInterrupt,
+          onChanged: (v) => setState(() => _autoInterrupt = v),
+        ),
       TextField(
         key: const Key('secretField'),
         controller: _secretController,
@@ -343,4 +371,79 @@ class _TestScreenState extends State<TestScreen> {
       ),
     ]);
   }
+}
+
+/// The name of [event] and its main fields, for the log.
+///
+/// Fields of the SDK keep their API names (`error`, `retryCounter`, …), so
+/// that they are not mistaken for the app's own `Fehler:` lines. No event
+/// carries a PIN, CAN or PUK. URLs are left out because they can carry a
+/// session token; the log only says whether one is present.
+String _describe(AusweisAppEvent event) {
+  List<String> reader(Reader reader) => [
+    'Leser: ${reader.name}',
+    'Karte: ${reader.card == null ? 'nein' : 'ja'}',
+    if (reader.card?.retryCounter case final counter?) 'retryCounter: $counter',
+  ];
+  List<String> error(String? text) => [if (text != null) 'error: $text'];
+
+  final fields = switch (event) {
+    AuthenticationStarted() ||
+    ChangePinStarted() ||
+    UnknownMessageReceived() ||
+    Disconnected() => const <String>[],
+    AuthenticationStartFailed(error: final text) => error(text),
+    AuthenticationCompleted(:final result) => [
+      'isSuccess: ${result.isSuccess}',
+      if (result.major != null) 'major: ${result.major}',
+      if (result.minor != null) 'minor: ${result.minor}',
+      if (result.reason != null) 'reason: ${result.reason}',
+      'URL: ${result.url == null ? 'keine' : 'vorhanden'}',
+    ],
+    AccessRightsRequested(error: final text) => error(text),
+    InsertCardRequested(error: final text) => error(text),
+    PinRequested(reader: final r, error: final text) ||
+    CanRequested(reader: final r, error: final text) ||
+    PukRequested(reader: final r, error: final text) ||
+    NewPinRequested(
+      reader: final r,
+      error: final text,
+    ) => [...reader(r), ...error(text)],
+    Paused(:final cause) => ['cause: $cause'],
+    ChangePinCompleted(:final success, :final reason) => [
+      'success: $success',
+      if (reason != null) 'reason: $reason',
+    ],
+    CertificateReceived(:final certificate) => [
+      if (certificate.subjectName != null)
+        'subjectName: ${certificate.subjectName}',
+    ],
+    ReaderChanged(reader: final r) => reader(r),
+    ReaderListReceived(:final readers) => [
+      if (readers.isEmpty)
+        'Leser: keine'
+      else
+        'Leser: ${readers.map((r) => r.name).join(', ')}',
+    ],
+    StatusChanged(:final workflow, :final progress, :final state) => [
+      'workflow: $workflow',
+      'progress: $progress',
+      'state: $state',
+    ],
+    InfoReceived(:final versionInfo, :final ausweisApp) => [
+      'Version: ${versionInfo?.implementationVersion}',
+      if (ausweisApp != null) 'ausweisApp: $ausweisApp',
+    ],
+    ApiLevelReceived(:final current, :final available, error: final text) => [
+      'current: $current',
+      'available: ${available.join(', ')}',
+      ...error(text),
+    ],
+    BadState(:final command) ||
+    UnknownCommand(:final command) => ['command: $command'],
+    InternalError(error: final text) ||
+    InvalidCommand(error: final text) => error(text),
+  };
+  final name = event.runtimeType.toString();
+  return fields.isEmpty ? name : '$name (${fields.join(', ')})';
 }
