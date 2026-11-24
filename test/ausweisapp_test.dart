@@ -65,6 +65,28 @@ class RecordingTransport extends FakeAusweisAppTransport {
   }
 }
 
+/// A fake that records calls to [start] and [stop]; every [stop] waits for
+/// its own gate in [stopGates], so stops can finish in any order.
+class PerStopGateTransport extends FakeAusweisAppTransport {
+  final List<String> calls = [];
+  final List<Completer<void>> stopGates = [];
+
+  @override
+  Future<void> start() async {
+    calls.add('start');
+    await super.start();
+  }
+
+  @override
+  Future<void> stop() async {
+    calls.add('stop');
+    final gate = Completer<void>();
+    stopGates.add(gate);
+    await gate.future;
+    await super.stop();
+  }
+}
+
 /// A fake whose [stop] never completes.
 class HangingStopTransport extends FakeAusweisAppTransport {
   HangingStopTransport({super.autoApiLevel});
@@ -440,6 +462,39 @@ void main() {
         expect(app.isRunning, isTrue);
       },
     );
+
+    test('start never overlaps an earlier stop that is still in flight, '
+        'even when a later stop finishes first', () async {
+      final transport = PerStopGateTransport();
+      final app = withTransport(transport);
+      addTearDown(() {
+        for (final gate in transport.stopGates) {
+          if (!gate.isCompleted) gate.complete();
+        }
+      });
+      await app.start();
+      // The first stop is held.
+      final firstStop = Outcome(app.stop());
+      // A start waits for that stop and fails at its deadline.
+      await expectLater(app.start(timeout: short), throwsStart('timeout'));
+      // Every stop issued after the first one finishes now.
+      for (final gate in transport.stopGates.skip(1)) {
+        gate.complete();
+      }
+      await pumpEventQueue();
+      // The next start must still wait for the first stop.
+      final starting = app.start(timeout: const Duration(seconds: 5));
+      await pumpEventQueue();
+      expect(transport.calls.where((c) => c == 'start'), hasLength(1));
+      // The failed start reused the pending stop instead of stopping again.
+      expect(transport.calls, ['start', 'stop']);
+      transport.stopGates.first.complete();
+      await starting;
+      expect(transport.calls, ['start', 'stop', 'start']);
+      expect(app.isRunning, isTrue);
+      expect(firstStop.done, isTrue);
+      expect(firstStop.error, isNull);
+    });
   });
 
   group('commands', () {

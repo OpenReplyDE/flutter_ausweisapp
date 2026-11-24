@@ -349,9 +349,18 @@ class AusweisApp {
   /// Stops the transport and keeps the stop in [_stopping] until it is done,
   /// so that the next start does not overlap it.
   ///
+  /// While a stop is still in flight, returns that stop instead of issuing
+  /// another one; [_stopping] then always covers every stop in flight. This
+  /// is enough: a stop is only issued for a running SDK, which needs a start
+  /// that got past its wait for [_stopping], or by a failing start. A start
+  /// that fails while [_stopping] is pending is still waiting for it and has
+  /// never started the transport.
+  ///
   /// Errors of the stop reach only whoever awaits the returned future; they
   /// are never reported as unhandled.
   Future<void> _stopTransport() {
+    final pending = _stopping;
+    if (pending != null) return pending;
     final stopping = Future<void>.sync(_transport.stop);
     _stopping = stopping;
     stopping.whenComplete(() {
