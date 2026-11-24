@@ -1,1 +1,1 @@
-rootProject.name = 'flutter_ausweisapp'
+rootProject.name = "flutter_ausweisapp"
