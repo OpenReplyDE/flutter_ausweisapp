@@ -17,7 +17,8 @@ class FakeAusweisAppTransport implements AusweisAppTransport {
   /// Decoded commands in the order they were sent.
   final List<Map<String, Object?>> sent = [];
 
-  /// When true, [start] never returns.
+  /// When true, [start] does not return until [stop] ends it with
+  /// [AusweisAppStartException] (code `start_failed`).
   bool hangOnStart = false;
 
   /// Thrown by the next [start], then cleared.
@@ -30,6 +31,9 @@ class FakeAusweisAppTransport implements AusweisAppTransport {
       StreamController<TransportEvent>.broadcast();
   bool _running = false;
 
+  /// Held by starts that [hangOnStart] keeps pending.
+  Completer<void>? _pendingStart;
+
   @override
   Stream<TransportEvent> get events => _controller.stream;
 
@@ -41,14 +45,24 @@ class FakeAusweisAppTransport implements AusweisAppTransport {
       throw error;
     }
     if (hangOnStart) {
-      await Completer<void>().future;
+      await (_pendingStart ??= Completer<void>()).future;
     }
     _running = true;
   }
 
+  /// Stops at once. A start that [hangOnStart] keeps pending fails with
+  /// [AusweisAppStartException] (code `start_failed`).
   @override
   Future<void> stop() async {
     _running = false;
+    final pending = _pendingStart;
+    _pendingStart = null;
+    pending?.completeError(
+      const AusweisAppStartException(
+        'start_failed',
+        'The start was cancelled by stop.',
+      ),
+    );
   }
 
   @override

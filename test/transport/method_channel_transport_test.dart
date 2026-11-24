@@ -217,4 +217,80 @@ void main() {
   test('events is a broadcast stream', () {
     expect(transport.events.isBroadcast, isTrue);
   });
+
+  group('instances share the process-wide channel', () {
+    const info = {'type': 'message', 'json': '{"msg":"INFO"}'};
+
+    /// Native stop waits for the returned gate; every other call answers.
+    Completer<void> holdStop() {
+      final gate = Completer<void>();
+      onCall = (call) async {
+        if (call.method == 'stop') await gate.future;
+        return null;
+      };
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete();
+      });
+      return gate;
+    }
+
+    MethodChannelAusweisAppTransport another() {
+      final other = MethodChannelAusweisAppTransport();
+      addTearDown(() => other.stop().catchError((_) {}));
+      return other;
+    }
+
+    test('a start waits for a stop of another instance and keeps the event '
+        'subscription', () async {
+      await transport.start();
+      final gate = holdStop();
+      final stopping = transport.stop();
+      final other = another();
+      final starting = other.start();
+      await pumpEventQueue();
+      expect(calls, ['listen', 'start', 'stop']);
+      gate.complete();
+      await stopping;
+      await starting;
+      expect(calls, ['listen', 'start', 'stop', 'start']);
+      final next = other.events.first;
+      sink!.success(info);
+      expect((await next as TransportMessage).json, '{"msg":"INFO"}');
+    });
+
+    test('a stop of an instance that another instance started after does not '
+        'stop the SDK', () async {
+      await transport.start();
+      final other = another();
+      await other.start();
+      await transport.stop();
+      expect(calls, ['listen', 'start', 'start']);
+      final next = other.events.first;
+      sink!.success(info);
+      expect((await next as TransportMessage).json, '{"msg":"INFO"}');
+    });
+
+    test('a stop during a start that waits for an earlier stop fails that '
+        'start before it reaches the native side', () async {
+      await transport.start();
+      final gate = holdStop();
+      final firstStop = transport.stop();
+      final starting = expectLater(
+        transport.start(),
+        throwsA(
+          isA<AusweisAppStartException>().having(
+            (e) => e.code,
+            'code',
+            'start_failed',
+          ),
+        ),
+      );
+      final secondStop = transport.stop();
+      gate.complete();
+      await firstStop;
+      await secondStop;
+      await starting;
+      expect(calls, ['listen', 'start', 'stop', 'stop', 'cancel']);
+    });
+  });
 }

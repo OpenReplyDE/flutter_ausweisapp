@@ -123,14 +123,30 @@ void main() {
     expect(fake.sent, hasLength(1));
   });
 
-  test('hangOnStart never completes start but stop still works', () async {
+  test('hangOnStart holds start until stop, which fails it with '
+      'start_failed', () async {
     fake.hangOnStart = true;
-    var completed = false;
-    unawaited(fake.start().then((_) => completed = true));
+    var settled = false;
+    final starting = fake.start();
+    unawaited(
+      starting
+          .then<void>((_) {}, onError: (_) {})
+          .whenComplete(() => settled = true),
+    );
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(completed, isFalse);
+    expect(settled, isFalse);
     expect(await fake.isRunning(), isFalse);
     await fake.stop();
+    await expectLater(
+      starting,
+      throwsA(
+        isA<AusweisAppStartException>().having(
+          (e) => e.code,
+          'code',
+          'start_failed',
+        ),
+      ),
+    );
     expect(await fake.isRunning(), isFalse);
   });
 

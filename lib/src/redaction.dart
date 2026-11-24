@@ -3,7 +3,8 @@ library;
 
 import 'dart:convert';
 
-/// Receives one log line per command or message. See `AusweisApp.logger`.
+/// Receives one log line per command or message. See the `logger` parameter
+/// of `AusweisApp`.
 typedef AusweisAppLogger = void Function(String line);
 
 const String _redacted = '***';

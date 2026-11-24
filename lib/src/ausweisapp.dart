@@ -66,7 +66,8 @@ class AusweisApp {
   Stream<String> get rawMessages => _rawMessages.stream;
 
   /// Whether commands can be sent: true once [start] completed, until [stop],
-  /// [dispose] or [Disconnected].
+  /// [dispose], [Disconnected] or a command that fails with
+  /// [AusweisAppNotRunningException].
   bool get isRunning => _running;
 
   /// Starts the SDK and switches it to [apiLevel].
@@ -103,12 +104,14 @@ class AusweisApp {
     return attempt.future;
   }
 
-  /// Stops the SDK. Does nothing if it is neither running nor starting.
+  /// Stops the SDK. Does nothing if it is neither running nor starting nor
+  /// stopping.
   ///
-  /// A pending [start] fails at once with `start_failed`. Waits at most 15 s
-  /// for the SDK to stop, then throws [AusweisAppTransportException] with
-  /// code `timeout`; a later [start] waits for that stop within its own
-  /// timeout.
+  /// A pending [start] fails at once with `start_failed`. A stop that is
+  /// still in flight, for example after a failed [start], is waited for
+  /// instead of issuing another one. Waits at most 15 s for the SDK to stop,
+  /// then throws [AusweisAppTransportException] with code `timeout`; a later
+  /// [start] waits for that stop within its own timeout.
   Future<void> stop() async {
     final stopping = _beginStop();
     if (stopping == null) return;
@@ -234,7 +237,14 @@ class AusweisApp {
 
   Future<void> _send(Map<String, Object?> command) async {
     if (!_running) throw const AusweisAppNotRunningException();
-    await _transmit(command);
+    try {
+      await _transmit(command);
+    } on AusweisAppNotRunningException {
+      // The SDK stopped without a Disconnected, for example because another
+      // instance stopped it.
+      _running = false;
+      rethrow;
+    }
   }
 
   /// The single path by which commands reach the transport.
@@ -330,8 +340,8 @@ class AusweisApp {
   }
 
   /// Cancels a pending start or stops a running SDK. Returns the transport
-  /// stop, or null if there is nothing to stop. Errors of the returned
-  /// future are never reported as unhandled.
+  /// stop, the stop still in flight if there is nothing else to stop, or
+  /// null. Errors of the returned future are never reported as unhandled.
   Future<void>? _beginStop() {
     final attempt = _attempt;
     if (attempt != null) {
@@ -346,7 +356,7 @@ class AusweisApp {
         ),
       );
     }
-    if (!_running) return null;
+    if (!_running) return _stopping;
     _running = false;
     return _stopTransport();
   }

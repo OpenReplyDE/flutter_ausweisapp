@@ -441,6 +441,48 @@ void main() {
       expect(fake.sent, [setApiLevel3, setApiLevel3]);
     });
 
+    test('a second concurrent stop completes only when the first has '
+        'completed', () async {
+      final transport = RecordingTransport();
+      final app = withTransport(transport);
+      await app.start();
+      final gate = transport.stopGate = Completer<void>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete();
+      });
+      final first = Outcome(app.stop());
+      final second = Outcome(app.stop());
+      await pumpEventQueue();
+      expect(first.done, isFalse);
+      expect(second.done, isFalse);
+      gate.complete();
+      await pumpEventQueue();
+      expect(first.done, isTrue);
+      expect(second.done, isTrue);
+      expect(second.error, isNull);
+      expect(transport.calls, ['start', 'stop']);
+    });
+
+    test('stop after a failed start waits for the stop that the failed start '
+        'triggered', () async {
+      final transport = RecordingTransport()
+        ..startError = const AusweisAppStartException('start_failed', 'x');
+      final app = withTransport(transport);
+      final gate = transport.stopGate = Completer<void>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete();
+      });
+      await expectLater(app.start(), throwsStart('start_failed'));
+      final stop = Outcome(app.stop());
+      await pumpEventQueue();
+      expect(stop.done, isFalse);
+      gate.complete();
+      await pumpEventQueue();
+      expect(stop.done, isTrue);
+      expect(stop.error, isNull);
+      expect(transport.calls, ['start', 'stop']);
+    });
+
     test(
       'start waits for a pending stop before starting the transport',
       () async {
@@ -513,6 +555,22 @@ void main() {
       await fake.start();
       await expectLater(eid.getStatus(), throwsNotRunning);
       expect(fake.sent, [setApiLevel3]);
+    });
+
+    test('a command answered with not_running sets isRunning to false, and '
+        'start starts again', () async {
+      await eid.start();
+      // The SDK stops without the controller knowing, for example because
+      // another instance stopped it.
+      await fake.stop();
+      await expectLater(eid.getInfo(), throwsNotRunning);
+      expect(eid.isRunning, isFalse);
+      await fake.start();
+      await expectLater(eid.getStatus(), throwsNotRunning);
+      expect(fake.sent, [setApiLevel3]);
+      await eid.start();
+      expect(eid.isRunning, isTrue);
+      expect(fake.sent, [setApiLevel3, setApiLevel3]);
     });
 
     test('disconnect emits Disconnected and later commands throw', () async {
@@ -883,7 +941,12 @@ void main() {
         throwsStart('timeout'),
       );
       expect(transport.sent, [setApiLevel3]);
-      await app.stop().timeout(guard);
+      // stop() waits for the hanging stop that the failed start triggered
+      // (at most 15 s, tested below); dispose() does not wait for it.
+      final stop = Outcome(app.stop());
+      await pumpEventQueue();
+      expect(stop.done, isFalse);
+      expect(transport.stops, 1);
       await app.dispose().timeout(guard);
     });
 
