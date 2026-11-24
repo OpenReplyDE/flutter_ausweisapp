@@ -9,6 +9,7 @@ void main() {
     'http://localhost:24727/eID-Client?tcTokenURL=$encoded',
     'eid://127.0.0.1:24727/eID-Client?tcTokenURL=$encoded',
     'https://www.example.de/eID-Client?foo=bar&tcTokenURL=$encoded',
+    'https://www.example.de/portal/eID-Client?tcTokenURL=$encoded',
   ]) {
     test('extracts the token URL from $link', () {
       expect(tcTokenUrlFromEidClientLink(Uri.parse(link)), Uri.parse(token));
@@ -20,6 +21,7 @@ void main() {
     'http://127.0.0.1:24727/eID-Client?tcTokenURL=not%20a%20url',
     'http://127.0.0.1:24727/eID-Client?tcTokenURL=http%3A%2F%2Fa.example%2Ft', // kein https
     'http://127.0.0.1:24727/other?tcTokenURL=$encoded', // anderer Pfad
+    'http://127.0.0.1:24727/eID-Client/other?tcTokenURL=$encoded', // Name nur enthalten
   ]) {
     test('returns null for $link', () {
       expect(tcTokenUrlFromEidClientLink(Uri.parse(link)), isNull);
