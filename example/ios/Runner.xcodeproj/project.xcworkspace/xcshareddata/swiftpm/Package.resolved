@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "ausweisapp2-sdk-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Governikus/AusweisApp2-SDK-iOS",
+      "state" : {
+        "revision" : "e7950f2dbf9762c43ff9db31ed5520198aba2a6d",
+        "version" : "2.6.3"
+      }
+    }
+  ],
+  "version" : 2
+}
