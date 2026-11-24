@@ -65,6 +65,35 @@ class RecordingTransport extends FakeAusweisAppTransport {
   }
 }
 
+/// A fake whose [stop] never completes.
+class HangingStopTransport extends FakeAusweisAppTransport {
+  HangingStopTransport({super.autoApiLevel});
+
+  int stops = 0;
+
+  @override
+  Future<void> stop() {
+    stops++;
+    return Completer<void>().future;
+  }
+}
+
+/// Records how a future settles, without awaiting it.
+class Outcome {
+  Outcome(Future<void> future) {
+    future.then<void>(
+      (_) => done = true,
+      onError: (Object e) {
+        error = e;
+        done = true;
+      },
+    );
+  }
+
+  bool done = false;
+  Object? error;
+}
+
 /// A fake whose event stream is driven directly by [controller].
 class ScriptedEventsTransport extends FakeAusweisAppTransport {
   final StreamController<TransportEvent> controller =
@@ -768,6 +797,127 @@ void main() {
     test('start after dispose throws StateError', () async {
       await eid.dispose();
       await expectLater(eid.start(), throwsStateError);
+    });
+  });
+
+  group('hanging transport stop', () {
+    // A future that does not settle within [guard] fails the test at once
+    // instead of blocking the suite.
+    const guard = Duration(seconds: 2);
+
+    AusweisApp withHangingStop(HangingStopTransport transport) {
+      final app = AusweisApp(transport: transport);
+      addTearDown(() => app.dispose().timeout(guard, onTimeout: () {}));
+      return app;
+    }
+
+    test('start still times out, and so does a later start, when the '
+        'transport stop hangs', () async {
+      final transport = HangingStopTransport(autoApiLevel: false);
+      final app = withHangingStop(transport);
+      await expectLater(
+        app.start(timeout: short).timeout(guard),
+        throwsStart('timeout'),
+      );
+      expect(transport.stops, 1);
+      expect(app.isRunning, isFalse);
+      // The pending stop holds the next transport start back, but only until
+      // the deadline of that start.
+      await expectLater(
+        app.start(timeout: short).timeout(guard),
+        throwsStart('timeout'),
+      );
+      expect(transport.sent, [setApiLevel3]);
+      await app.stop().timeout(guard);
+      await app.dispose().timeout(guard);
+    });
+
+    test('disconnect during start fails the start when the transport stop '
+        'hangs', () async {
+      final transport = HangingStopTransport(autoApiLevel: false);
+      final app = withHangingStop(transport);
+      final starting = app.start(timeout: const Duration(seconds: 5));
+      await pumpEventQueue();
+      transport.disconnect();
+      await expectLater(starting.timeout(guard), throwsStart('start_failed'));
+      await app.dispose().timeout(guard);
+    });
+
+    test('dispose completes at once when the transport stop hangs while '
+        'running', () async {
+      final transport = HangingStopTransport();
+      final app = withHangingStop(transport);
+      await app.start();
+      var closed = false;
+      app.events.listen(null, onDone: () => closed = true);
+      await app.dispose().timeout(guard);
+      expect(transport.stops, 1);
+      expect(app.isRunning, isFalse);
+      expect(closed, isTrue);
+    });
+
+    test('dispose during start completes at once and fails the start when '
+        'the transport stop hangs', () async {
+      final transport = HangingStopTransport()..hangOnStart = true;
+      final app = withHangingStop(transport);
+      final starting = app.start();
+      await app.dispose().timeout(guard);
+      await expectLater(starting.timeout(guard), throwsStart('start_failed'));
+      expect(transport.stops, 1);
+    });
+
+    // Fake time: these tests never await a future of the plugin directly,
+    // only pump and inspect [Outcome]s.
+    testWidgets('stop gives up after 15 s when the transport stop hangs', (
+      tester,
+    ) async {
+      final app = AusweisApp(transport: HangingStopTransport());
+      final start = Outcome(app.start());
+      await tester.pump();
+      expect(start.done, isTrue);
+      expect(app.isRunning, isTrue);
+      final stop = Outcome(app.stop());
+      await tester.pump(const Duration(seconds: 14));
+      expect(stop.done, isFalse);
+      expect(app.isRunning, isFalse);
+      await tester.pump(const Duration(seconds: 2));
+      expect(stop.done, isTrue);
+      expect(
+        stop.error,
+        isA<AusweisAppTransportException>().having(
+          (e) => e.code,
+          'code',
+          'timeout',
+        ),
+      );
+    });
+
+    testWidgets('stop during start fails the start at once and gives up '
+        'after 15 s when the transport stop hangs', (tester) async {
+      final transport = HangingStopTransport()..hangOnStart = true;
+      final app = AusweisApp(transport: transport);
+      final start = Outcome(app.start());
+      final stop = Outcome(app.stop());
+      await tester.pump();
+      expect(
+        start.error,
+        isA<AusweisAppStartException>().having(
+          (e) => e.code,
+          'code',
+          'start_failed',
+        ),
+      );
+      expect(transport.stops, 1);
+      expect(stop.done, isFalse);
+      await tester.pump(const Duration(seconds: 16));
+      expect(
+        stop.error,
+        isA<AusweisAppTransportException>().having(
+          (e) => e.code,
+          'code',
+          'timeout',
+        ),
+      );
     });
   });
 }

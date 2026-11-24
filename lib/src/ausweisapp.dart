@@ -31,6 +31,9 @@ class AusweisApp {
   /// The API level the plugin speaks. [start] switches the SDK to it.
   static const int apiLevel = 3;
 
+  /// How long [stop] waits for the transport to stop.
+  static const Duration _stopTimeout = Duration(seconds: 15);
+
   final AusweisAppTransport _transport;
   final StreamController<AusweisAppEvent> _events =
       StreamController<AusweisAppEvent>.broadcast();
@@ -64,7 +67,8 @@ class AusweisApp {
   /// One [timeout] covers both the transport start and the `API_LEVEL`
   /// answer. Concurrent calls share one start; a call while running returns
   /// at once. Throws [AusweisAppStartException] with code `start_failed`,
-  /// `timeout` or `api_level`; the transport is stopped again then.
+  /// `timeout` or `api_level`; the transport is stopped again then, and the
+  /// next start waits for that stop within its own [timeout].
   /// Throws [StateError] after [dispose].
   Future<void> start({Duration timeout = const Duration(seconds: 15)}) {
     if (_disposed) {
@@ -76,61 +80,49 @@ class AusweisApp {
 
     final attempt = _StartAttempt();
     _attempt = attempt;
-    attempt.timer = Timer(
-      timeout,
-      () => _fail(
-        attempt,
-        AusweisAppStartException(
-          'timeout',
-          'The AusweisApp SDK did not start within '
-              '${timeout.inMilliseconds} ms.',
+    attempt.timer = Timer(timeout, () {
+      unawaited(
+        _fail(
+          attempt,
+          AusweisAppStartException(
+            'timeout',
+            'The AusweisApp SDK did not start within '
+                '${timeout.inMilliseconds} ms.',
+          ),
         ),
-      ),
-    );
+      );
+    });
     unawaited(_runStart(attempt));
     return attempt.future;
   }
 
-  /// Stops the SDK. Does nothing if it is not running. A pending [start]
-  /// fails with `start_failed`.
+  /// Stops the SDK. Does nothing if it is neither running nor starting.
+  ///
+  /// A pending [start] fails at once with `start_failed`. Waits at most 15 s
+  /// for the SDK to stop, then throws [AusweisAppTransportException] with
+  /// code `timeout`; a later [start] waits for that stop within its own
+  /// timeout.
   Future<void> stop() async {
-    final attempt = _attempt;
-    if (attempt != null) {
-      unawaited(
-        _fail(
-          attempt,
-          const AusweisAppStartException(
-            'start_failed',
-            'The start was cancelled by stop().',
-          ),
-        ),
-      );
-      try {
-        await attempt.future;
-      } on Object {
-        // Reported to the caller of start().
-      }
-    }
-    if (!_running) return;
-    _running = false;
-    final stopping = _transport.stop();
-    _stopping = stopping;
-    try {
-      await stopping;
-    } finally {
-      if (identical(_stopping, stopping)) _stopping = null;
-    }
+    final stopping = _beginStop();
+    if (stopping == null) return;
+    await stopping.timeout(
+      _stopTimeout,
+      onTimeout: () => throw AusweisAppTransportException(
+        'timeout',
+        'The AusweisApp SDK did not stop within '
+            '${_stopTimeout.inMilliseconds} ms.',
+      ),
+    );
   }
 
   /// Stops the SDK and closes [events] and [rawMessages]. Never throws.
+  ///
+  /// Issues the stop but does not wait for it, so a hanging SDK cannot keep
+  /// dispose from completing. A pending [start] fails with `start_failed`.
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    try {
-      await stop();
-    } on Object {
-      // Disposing must not fail because the SDK could not be stopped.
-    }
+    unawaited(_beginStop());
     await _subscription.cancel();
     await _events.close();
     await _rawMessages.close();
@@ -244,12 +236,14 @@ class AusweisApp {
 
   Future<void> _runStart(_StartAttempt attempt) async {
     try {
+      // A pending stop must finish before the transport starts again. The
+      // attempt's timer bounds this wait.
       final stopping = _stopping;
       if (stopping != null) {
         try {
           await stopping;
         } on Object {
-          // Reported to the caller of stop().
+          // Reported to whoever awaited the stop.
         }
       }
       if (attempt.settled) return;
@@ -258,7 +252,7 @@ class AusweisApp {
       attempt.awaitingApiLevel = true;
       await _transmit(const SetApiLevel(apiLevel).toJson());
     } on Object catch (error) {
-      await _fail(attempt, _asStartException(error));
+      unawaited(_fail(attempt, _asStartException(error)));
     }
   }
 
@@ -315,21 +309,55 @@ class AusweisApp {
     attempt.completer.complete();
   }
 
-  /// Ends [attempt] with [error] after stopping the transport. Never throws.
-  Future<void> _fail(
-    _StartAttempt attempt,
-    AusweisAppStartException error,
-  ) async {
-    if (attempt.settled) return;
+  /// Cancels a pending start or stops a running SDK. Returns the transport
+  /// stop, or null if there is nothing to stop. Errors of the returned
+  /// future are never reported as unhandled.
+  Future<void>? _beginStop() {
+    final attempt = _attempt;
+    if (attempt != null) {
+      // Callers of start() still get the error. It was asked for, so it is
+      // not reported as unhandled when none of them listens.
+      attempt.future.ignore();
+      return _fail(
+        attempt,
+        const AusweisAppStartException(
+          'start_failed',
+          'The start was cancelled by stop() or dispose().',
+        ),
+      );
+    }
+    if (!_running) return null;
+    _running = false;
+    return _stopTransport();
+  }
+
+  /// Ends [attempt] with [error] at once and stops the transport.
+  ///
+  /// Does not wait for the stop, so a hanging stop cannot delay the error.
+  /// Returns that stop. [stop] waits for it at most 15 s; the next start
+  /// waits for it within its own timeout.
+  Future<void> _fail(_StartAttempt attempt, AusweisAppStartException error) {
+    if (attempt.settled) return Future<void>.value();
     attempt.settled = true;
     attempt.timer.cancel();
-    try {
-      await _transport.stop();
-    } on Object {
-      // The start error is what the caller needs to see.
-    }
     _attempt = null;
+    final stopping = _stopTransport();
     attempt.completer.completeError(error);
+    return stopping;
+  }
+
+  /// Stops the transport and keeps the stop in [_stopping] until it is done,
+  /// so that the next start does not overlap it.
+  ///
+  /// Errors of the stop reach only whoever awaits the returned future; they
+  /// are never reported as unhandled.
+  Future<void> _stopTransport() {
+    final stopping = Future<void>.sync(_transport.stop);
+    _stopping = stopping;
+    stopping.whenComplete(() {
+      if (identical(_stopping, stopping)) _stopping = null;
+    }).ignore();
+    return stopping;
   }
 
   static AusweisAppStartException _asStartException(Object error) =>
@@ -354,7 +382,7 @@ class _StartAttempt {
   /// Set once SET_API_LEVEL is about to be sent.
   bool awaitingApiLevel = false;
 
-  /// Set once the attempt succeeded or began to fail.
+  /// Set once the attempt succeeded or failed.
   bool settled = false;
 
   Future<void> get future => completer.future;
