@@ -1,0 +1,14 @@
+.DS_Store
+
+# Lokale Referenzquellen von Governikus (EUPL 1.2), nicht Teil des Plugins.
+# Die Wrapper werden bewusst nicht gebraucht (Spec, Anti-Ziele).
+/AusweisApp-SDK-Wrapper-main/
+/AusweisApp2Wrapper-iOS-SPM-main/
+
+# Vom SDK-Quellbaum bleibt nur die Protokoll-Doku samt Lizenztexten sichtbar.
+/AusweisApp-community/*
+!/AusweisApp-community/LICENSE.txt
+!/AusweisApp-community/LICENSE.officially.txt
+!/AusweisApp-community/docs/
+/AusweisApp-community/docs/*
+!/AusweisApp-community/docs/sdk/
