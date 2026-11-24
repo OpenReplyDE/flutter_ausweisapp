@@ -11,6 +11,7 @@ import 'errors.dart';
 import 'events.dart';
 import 'protocol/command.dart';
 import 'protocol/message.dart';
+import 'redaction.dart';
 import 'transport/method_channel_transport.dart';
 import 'transport/transport.dart';
 
@@ -20,8 +21,13 @@ import 'transport/transport.dart';
 /// method; it returns once the command is handed to the SDK. Answers arrive
 /// only as [events].
 class AusweisApp {
-  AusweisApp({AusweisAppTransport? transport})
-    : _transport = transport ?? MethodChannelAusweisAppTransport() {
+  /// Pass [logger] to write every command and message as one line: `-> ` and
+  /// the command, `<- ` and the message. Off by default. PIN, CAN, PUK and
+  /// HTTP header values are replaced by `***`; see [redactCommand]. An error
+  /// of [logger] is ignored.
+  AusweisApp({AusweisAppTransport? transport, AusweisAppLogger? logger})
+    : _logger = logger,
+      _transport = transport ?? MethodChannelAusweisAppTransport() {
     _subscription = _transport.events.listen(
       _onTransportEvent,
       onError: _events.addError,
@@ -35,6 +41,7 @@ class AusweisApp {
   static const Duration _stopTimeout = Duration(seconds: 15);
 
   final AusweisAppTransport _transport;
+  final AusweisAppLogger? _logger;
   final StreamController<AusweisAppEvent> _events =
       StreamController<AusweisAppEvent>.broadcast();
   final StreamController<String> _rawMessages =
@@ -231,8 +238,20 @@ class AusweisApp {
   }
 
   /// The single path by which commands reach the transport.
-  Future<void> _transmit(Map<String, Object?> command) =>
-      _transport.send(jsonEncode(command));
+  Future<void> _transmit(Map<String, Object?> command) {
+    _log(() => '-> ${redactCommand(command)}');
+    return _transport.send(jsonEncode(command));
+  }
+
+  void _log(String Function() line) {
+    final logger = _logger;
+    if (logger == null) return;
+    try {
+      logger(line());
+    } on Object {
+      // A broken logger must not break the SDK.
+    }
+  }
 
   Future<void> _runStart(_StartAttempt attempt) async {
     try {
@@ -259,6 +278,7 @@ class AusweisApp {
   void _onTransportEvent(TransportEvent event) {
     switch (event) {
       case TransportMessage(:final json):
+        _log(() => '<- $json');
         _rawMessages.add(json);
         final message = Message.parse(json);
         _events.add(AusweisAppEvent.fromMessage(message));

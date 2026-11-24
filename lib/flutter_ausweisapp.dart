@@ -1,4 +1,5 @@
 export 'src/ausweisapp.dart';
+export 'src/redaction.dart';
 export 'src/events.dart';
 export 'src/protocol/command.dart';
 export 'src/protocol/message.dart';
