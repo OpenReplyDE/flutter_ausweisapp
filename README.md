@@ -2,8 +2,6 @@
 
 `flutter_ausweisapp` bindet das AusweisApp-SDK von Governikus (Version 2.6.3) in Flutter-Apps für Android und iOS ein. Damit kann sich eine Nutzerin oder ein Nutzer mit dem Online-Ausweis authentisieren, ohne die App zu verlassen: Das SDK liest die Karte per NFC, die App zeigt alle Dialoge (PIN, CAN, PUK, Zugriffsrechte) auf ihren eigenen Screens. Das Plugin bringt keine Oberfläche mit. Es reicht die JSON-Kommandos und -Nachrichten des SDK an Dart durch und stellt sie als typisierte Methoden und als Ereignis-Stream bereit.
 
-Der Entwurf mit allen Entscheidungen steht in `docs/superpowers/specs/2026-11-24-flutter-ausweisapp-bridge-design.md`.
-
 **Wichtig: Echtes NFC ist bisher ungetestet.** Emulator und Simulator haben kein NFC. Die Simulator-Karte des SDK umgeht das Lesen der Karte vollständig. Alles, was NFC berührt (Karte anlegen, Karte wegziehen, Hintergrund, NFC-Dialog unter iOS), gilt erst als geprüft, wenn die Prüfliste in `docs/geraetetest.md` auf echten Geräten durchlaufen wurde.
 
 ## Inhalt
@@ -17,12 +15,12 @@ Der Entwurf mit allen Entscheidungen steht in `docs/superpowers/specs/2026-11-24
 - [Simulator-Karte](#simulator-karte)
 - [Entwicklung](#entwicklung)
 - [SDK-Update](#sdk-update)
-- [Abgrenzung: Keycloak und BundID](#abgrenzung-keycloak-und-bundid)
+- [Abgrenzung: Login-Ablauf der App](#abgrenzung-login-ablauf-der-app)
 - [Lizenz](#lizenz)
 
 ## Nutzung
 
-Das Plugin wird über einen Pfad- oder Git-Eintrag in der `pubspec.yaml` der App eingebunden (`publish_to: none`, es ist nicht auf pub.dev veröffentlicht). Danach genügt ein Import:
+Das Plugin wird über einen Pfad- oder Git-Eintrag in der `pubspec.yaml` der App eingebunden (es ist nicht auf pub.dev veröffentlicht). Danach genügt ein Import:
 
 ```dart
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
@@ -200,10 +198,14 @@ Die Beispiel-App in `example/` ist eine einfache Testoberfläche, die alle Ablä
 
 Die SDK-Version steht an zwei Stellen: in `android/build.gradle.kts` (`com.governikus:ausweisapp:2.6.3`) und in `ios/flutter_ausweisapp/Package.swift` (`exact: "2.6.3"`). Lesen Sie vor dem Anheben das SDK-Changelog unter `AusweisApp-community/docs/sdk/changelog.rst`, weil das Plugin das Protokoll selbst umsetzt und Änderungen dort nachzieht. Das Plugin stellt beim Start das API-Level 3 ein, damit ein neueres SDK das Verhalten nicht stillschweigend ändert.
 
-## Abgrenzung: Keycloak und BundID
+## Abgrenzung: Login-Ablauf der App
 
-Dieses Plugin kümmert sich nur um den Kartenzugriff und nimmt eine `tcTokenURL` entgegen. Wie die App diese Adresse aus dem Keycloak- und BundID-Ablauf gewinnt und den Login danach abschließt, gehört zur App; ob BundID diesen Weg zulässt, ist nicht geprüft und muss mit den Verantwortlichen geklärt werden. Bis dahin lässt sich das Plugin vollständig gegen den Governikus-Testdienst entwickeln.
+Dieses Plugin kümmert sich nur um den Kartenzugriff und nimmt eine `tcTokenURL` entgegen. Wie die App diese Adresse aus ihrem Login-Ablauf gewinnt (zum Beispiel aus einem Identity-Provider wie Keycloak mit angebundenem BundID-Konto) und den Login danach abschließt, gehört zur App. Ob der jeweilige Dienst diesen Weg zulässt, müssen Sie mit dessen Betreiber klären. Unabhängig davon lässt sich das Plugin vollständig gegen den Governikus-Testdienst entwickeln.
 
 ## Lizenz
 
-Das AusweisApp-SDK steht unter der EUPL 1.2. Wer eine App mit diesem Plugin ausliefert, verbreitet das SDK mit. Was dabei zu beachten ist, steht in `NOTICE.md`. Die Datei `LICENSE` ist bis zur Klärung ein Platzhalter.
+Copyright © 2026 Open Reply GmbH.
+
+Das Plugin steht unter der Open-Source-Lizenz für die Europäische Union (EUPL) in Version 1.2. Der Lizenztext steht in der Datei `LICENSE`.
+
+Das eingebundene AusweisApp-SDK von Governikus steht ebenfalls unter der EUPL 1.2. Wer eine App mit diesem Plugin ausliefert, verbreitet das SDK mit. Was dabei zu beachten ist, steht in `NOTICE.md`.

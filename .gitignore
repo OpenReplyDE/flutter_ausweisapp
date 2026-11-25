@@ -1,7 +1,7 @@
 .DS_Store
 
 # Lokale Referenzquellen von Governikus (EUPL 1.2), nicht Teil des Plugins.
-# Die Wrapper werden bewusst nicht gebraucht (Spec, Anti-Ziele).
+# Der Code der Wrapper darf nicht ins Plugin übertragen werden.
 /AusweisApp-SDK-Wrapper-main/
 /AusweisApp2Wrapper-iOS-SPM-main/
 

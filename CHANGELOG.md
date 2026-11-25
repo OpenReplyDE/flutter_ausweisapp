@@ -12,4 +12,6 @@ Erste Fassung. Das Plugin bindet das AusweisApp-SDK 2.6.3 für Android und iOS i
 - Kommandos und Nachrichten auf Wunsch mitschreiben, wobei PIN, CAN, PUK und Header-Werte durch `***` ersetzt werden,
 - mit `FakeAusweisAppTransport` (`package:flutter_ausweisapp/testing.dart`) ohne Gerät getestet werden.
 
+Das Plugin steht unter der EUPL 1.2.
+
 Echtes NFC ist noch nicht auf Geräten geprüft; siehe `docs/geraetetest.md`.
