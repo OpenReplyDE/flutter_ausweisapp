@@ -22,7 +22,7 @@ Deutsche Fassung: [README.de.md](README.de.md)
 
 ## Usage
 
-Add the plugin through a path or Git entry in the app's `pubspec.yaml` (it is not published on pub.dev). After that, one import is enough:
+Add the plugin through a Git entry in the app's `pubspec.yaml` (it is not published on pub.dev; the entry is shown in [docs/integration.md](docs/integration.md)). After that, one import is enough:
 
 ```dart
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
@@ -207,6 +207,8 @@ The SDK version appears in two places: in `android/build.gradle.kts` (`com.gover
 ## Scope: the app's login flow
 
 This plugin only handles card access and accepts a `tcTokenURL`. How the app obtains this address from its login flow (for example from an identity provider such as Keycloak with a connected BundID account) and then completes the login is up to the app. Whether the respective service permits this route must be clarified with its operator. Independently of that, the plugin can be developed entirely against the Governikus test service.
+
+How to build this flow around the plugin, with a web view that hands the eID step to the SDK, is described step by step in [docs/integration.md](docs/integration.md).
 
 ## License
 

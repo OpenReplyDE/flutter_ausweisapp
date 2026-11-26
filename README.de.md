@@ -22,7 +22,7 @@ English version: [README.md](README.md)
 
 ## Nutzung
 
-Das Plugin wird über einen Pfad- oder Git-Eintrag in der `pubspec.yaml` der App eingebunden (es ist nicht auf pub.dev veröffentlicht). Danach genügt ein Import:
+Das Plugin wird über einen Git-Eintrag in der `pubspec.yaml` der App eingebunden (es ist nicht auf pub.dev veröffentlicht; den Eintrag zeigt [docs/integration.de.md](docs/integration.de.md)). Danach genügt ein Import:
 
 ```dart
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
@@ -207,6 +207,8 @@ Die SDK-Version steht an zwei Stellen: in `android/build.gradle.kts` (`com.gover
 ## Abgrenzung: Login-Ablauf der App
 
 Dieses Plugin kümmert sich nur um den Kartenzugriff und nimmt eine `tcTokenURL` entgegen. Wie die App diese Adresse aus ihrem Login-Ablauf gewinnt (zum Beispiel aus einem Identity-Provider wie Keycloak mit angebundenem BundID-Konto) und den Login danach abschließt, gehört zur App. Ob der jeweilige Dienst diesen Weg zulässt, müssen Sie mit dessen Betreiber klären. Unabhängig davon lässt sich das Plugin vollständig gegen den Governikus-Testdienst entwickeln.
+
+Wie Sie diesen Ablauf um das Plugin herum bauen, mit einer Web-Ansicht, die den Ausweis-Schritt an das SDK übergibt, beschreibt [docs/integration.de.md](docs/integration.de.md) Schritt für Schritt.
 
 ## Lizenz
 
