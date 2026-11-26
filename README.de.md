@@ -4,7 +4,7 @@ English version: [README.md](README.md)
 
 `flutter_ausweisapp` bindet das AusweisApp-SDK von Governikus (Version 2.6.3) in Flutter-Apps für Android und iOS ein. Damit kann sich eine Nutzerin oder ein Nutzer mit dem Online-Ausweis authentisieren, ohne die App zu verlassen: Das SDK liest die Karte per NFC, die App zeigt alle Dialoge (PIN, CAN, PUK, Zugriffsrechte) auf ihren eigenen Screens. Das Plugin bringt keine Oberfläche mit. Es reicht die JSON-Kommandos und -Nachrichten des SDK an Dart durch und stellt sie als typisierte Methoden und als Ereignis-Stream bereit.
 
-**Stand der Gerätetests.** Unter iOS ist das Plugin auf einem iPhone 16 Pro mit iOS 27.2.1 und einem echten Personalausweis geprüft, einschließlich einer vollständigen Anmeldung gegen einen Produktivdienst; die Ergebnisse stehen in `docs/geraetetest.md`. **Unter Android ist echtes NFC noch ungetestet:** Emulator und Simulator haben kein NFC, und die Simulator-Karte des SDK umgeht das Lesen der Karte vollständig. Alles, was unter Android NFC berührt, gilt erst als geprüft, wenn die Prüfliste dort auf einem echten Gerät durchlaufen wurde. Die mit Version 0.2.0 ergänzten Funktionen (NFC-Status und NFC-Einstellungen) sind auf beiden Plattformen noch nicht auf einem echten Gerät gelaufen.
+**Stand der Gerätetests.** Unter iOS ist das Plugin auf einem iPhone 16 Pro mit iOS 27.2.1 und einem echten Personalausweis geprüft, einschließlich einer vollständigen Anmeldung gegen einen Produktivdienst; die Ergebnisse stehen in `docs/geraetetest.md`. **Unter Android ist echtes NFC noch ungetestet:** Emulator und Simulator haben kein NFC, und die Simulator-Karte des SDK umgeht das Lesen der Karte vollständig. Alles, was unter Android NFC berührt, gilt erst als geprüft, wenn die Prüfliste dort auf einem echten Gerät durchlaufen wurde. Die mit Version 0.2.0 ergänzten Funktionen (NFC-Status und NFC-Einstellungen) sind auf demselben iPhone bestätigt; unter Android sind sie noch auf keinem Gerät gelaufen.
 
 ## Inhalt
 
@@ -147,7 +147,7 @@ case AuthenticationCompleted(:final result):
 Was die Klassen nicht sagen:
 
 - Die Zuordnung richtet sich allein nach `reason`. Die SDK-Dokumentation führt die Werte von `minor` nicht auf, und auf einem iPhone meldete `minor` auch dann `cancellationByUser`, als der Ausweis weggezogen wurde.
-- Das SDK hat keinen Code für "das Gerät ist offline". Dieser Fall kommt als einer der Netzwerkfehler an; `network` heißt deshalb "Verbindungsproblem", nicht streng "keine Internetverbindung".
+- Das SDK hat keinen Code für "das Gerät ist offline". Dieser Fall kommt als einer der Netzwerkfehler an; `network` heißt deshalb "Verbindungsproblem", nicht streng "keine Internetverbindung". Auf einem iPhone im Flugmodus beobachtet: `reason: Get_TcToken_Network_Error`, und das Ergebnis trägt keine `url`.
 - Quelle ist die Liste der Fehlercodes in der SDK-Dokumentation, `AusweisApp-community/docs/failurecodes/failurecodes.rst`. Die vollständige Tabelle steht in `lib/src/failure.dart`, und der Test `test/failure_test.dart` vergleicht sie mit dieser Datei.
 
 ### Die App ohne Gerät testen

@@ -4,7 +4,7 @@ Deutsche Fassung: [README.de.md](README.de.md)
 
 `flutter_ausweisapp` integrates the Governikus AusweisApp SDK (version 2.6.3) into Flutter apps for Android and iOS. With it, a user can authenticate with the German eID (Online-Ausweis) without leaving the app: the SDK reads the card over NFC, and the app shows all dialogs (PIN, CAN, PUK, access rights) on its own screens. The plugin ships no user interface. It passes the SDK's JSON commands and messages through to Dart and exposes them as typed methods and as an event stream.
 
-**Status of the device tests.** On iOS, the plugin has been tested on an iPhone 16 Pro with iOS 27.2.1 and a real ID card, including a complete login against a production service; the results are in `docs/device-test.md`. **On Android, real NFC is still untested:** the emulator and the simulator have no NFC, and the SDK's simulator card bypasses reading the card entirely. Everything that involves NFC on Android counts as verified only once the checklist has been completed there on a real device. The functions added in version 0.2.0 (NFC status and NFC settings) have not been run on a real device on either platform yet.
+**Status of the device tests.** On iOS, the plugin has been tested on an iPhone 16 Pro with iOS 27.2.1 and a real ID card, including a complete login against a production service; the results are in `docs/device-test.md`. **On Android, real NFC is still untested:** the emulator and the simulator have no NFC, and the SDK's simulator card bypasses reading the card entirely. Everything that involves NFC on Android counts as verified only once the checklist has been completed there on a real device. The functions added in version 0.2.0 (NFC status and NFC settings) are confirmed on the same iPhone; on Android they have not been run on a device yet.
 
 ## Contents
 
@@ -147,7 +147,7 @@ case AuthenticationCompleted(:final result):
 What the kinds do not tell:
 
 - The assignment goes by `reason` alone. The SDK documentation does not list the values of `minor`, and on an iPhone `minor` reported `cancellationByUser` also when the card was pulled away.
-- The SDK has no code for "the device is offline". That case arrives as one of the network errors; `network` therefore means "connection problem", not strictly "no internet connection".
+- The SDK has no code for "the device is offline". That case arrives as one of the network errors; `network` therefore means "connection problem", not strictly "no internet connection". Observed on an iPhone in flight mode: `reason: Get_TcToken_Network_Error`, and the result carries no `url`.
 - The source is the list of failure codes in the SDK documentation, `AusweisApp-community/docs/failurecodes/failurecodes.rst`. The complete table is in `lib/src/failure.dart`, and the test `test/failure_test.dart` compares it with that file.
 
 ### Testing the app without a device
