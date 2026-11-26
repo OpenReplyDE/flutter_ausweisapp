@@ -87,7 +87,7 @@ Unter iOS zeigt das System einen eigenen NFC-Dialog, solange das SDK die Karte l
 
 `interrupt()` ist nur direkt nach einem dieser vier Ereignisse erlaubt. Zu jedem anderen Zeitpunkt, etwa während `InsertCardRequested`, antwortet das SDK mit dem Ereignis `BadState`.
 
-Dass der Dialog offen bleibt und die App darunter nicht bedienbar ist, legt die SDK-Dokumentation nahe; auf einem echten iPhone ist es noch nicht bestätigt. Die erste iOS-Zeile in `docs/geraetetest.md` prüft genau das.
+Auf einem iPhone 16 Pro mit iOS 27.2.1 ist das bestätigt: Der Dialog bleibt nach `PinRequested` offen, und die App lässt sich darunter nicht bedienen. Schließt die Nutzerin oder der Nutzer den Dialog über dessen eigene Schaltfläche, bricht das SDK den Ablauf ab und meldet `AuthenticationCompleted` mit `reason: User_Cancelled`.
 
 ### Die App ohne Gerät testen
 
