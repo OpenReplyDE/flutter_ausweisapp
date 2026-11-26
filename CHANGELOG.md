@@ -1,17 +1,19 @@
-# Änderungen
+# Changes
+
+Deutsche Fassung: [CHANGELOG.de.md](CHANGELOG.de.md)
 
 ## 0.0.1
 
-Erste Fassung. Das Plugin bindet das AusweisApp-SDK 2.6.3 für Android und iOS in Flutter ein und kann:
+First version. The plugin integrates the AusweisApp SDK 2.6.3 into Flutter for Android and iOS and can:
 
-- das SDK starten und stoppen und alle 20 Kommandos des SDK als Methoden senden, darunter Authentisierung, PIN-Änderung (auch Transport-PIN), PIN, CAN und PUK, Zugriffsrechte ansehen und einschränken, Zertifikat, Status und Abbruch,
-- alle Nachrichten des SDK als benannte Ereignisse in einem Stream liefern, unbekannte Nachrichten mit dem Roh-JSON,
-- den NFC-Lesemodus unter Android selbst steuern,
-- unter iOS den NFC-Dialog mit eigenen Texten zeigen und mit `interrupt()` schließen,
-- die `tcTokenURL` aus einem eID-Client-Link lesen (`tcTokenUrlFromEidClientLink`),
-- Kommandos und Nachrichten auf Wunsch mitschreiben, wobei PIN, CAN, PUK und Header-Werte durch `***` ersetzt werden,
-- mit `FakeAusweisAppTransport` (`package:flutter_ausweisapp/testing.dart`) ohne Gerät getestet werden.
+- start and stop the SDK and send all 20 SDK commands as methods, including authentication, PIN change (also transport PIN), PIN, CAN and PUK, viewing and restricting access rights, certificate, status and cancellation,
+- deliver all SDK messages as named events in a stream, unknown messages with the raw JSON,
+- control the NFC reader mode on Android by itself,
+- show the NFC dialog with custom texts on iOS and close it with `interrupt()`,
+- read the `tcTokenURL` from an eID client link (`tcTokenUrlFromEidClientLink`),
+- log commands and messages on request, with PIN, CAN, PUK and header values replaced by `***`,
+- be tested without a device using `FakeAusweisAppTransport` (`package:flutter_ausweisapp/testing.dart`).
 
-Das Plugin steht unter der EUPL 1.2.
+The plugin is licensed under the EUPL 1.2.
 
-Echtes NFC ist noch nicht auf Geräten geprüft; siehe `docs/geraetetest.md`.
+On iOS, the plugin has been tested on a real device; on Android, real NFC is still untested; see `docs/device-test.md`.

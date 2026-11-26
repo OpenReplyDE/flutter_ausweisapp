@@ -1,35 +1,37 @@
-# Lizenzhinweis
+# License notice
 
-Dieser Hinweis richtet sich an alle, die das Plugin `flutter_ausweisapp` nutzen, weitergeben oder eine App damit ausliefern, und an deren Rechtsabteilung. Er ist keine Rechtsberatung.
+Deutsche Fassung: [NOTICE.de.md](NOTICE.de.md)
 
-## Das Plugin steht unter der EUPL 1.2
+This notice is addressed to everyone who uses or redistributes the plugin `flutter_ausweisapp` or ships an app with it, and to their legal department. It is not legal advice.
+
+## The plugin is licensed under the EUPL 1.2
 
 Copyright © 2026 Open Reply GmbH.
 
-Das Plugin ist Open Source und steht unter der Open-Source-Lizenz für die Europäische Union (EUPL) in Version 1.2. Der vollständige Lizenztext steht in der Datei `LICENSE` in diesem Repository.
+The plugin is open source and is licensed under the European Union Public Licence (EUPL), version 1.2. The full license text is in the file `LICENSE` in this repository.
 
-Die EUPL enthält eine Copyleft-Klausel: Wer das Plugin oder eine Bearbeitung davon weitergibt, muss dabei die Bedingungen aus Artikel 5 der EUPL einhalten. Dazu gehören die Weitergabe unter der EUPL und die Bereitstellung des Quellcodes.
+The EUPL contains a copyleft clause: whoever redistributes the plugin or a modification of it must comply with the conditions of Article 5 of the EUPL. These include redistribution under the EUPL and making the source code available.
 
-## Das SDK steht ebenfalls unter der EUPL 1.2
+## The SDK is also licensed under the EUPL 1.2
 
-Das Plugin bindet das AusweisApp-SDK von Governikus, Version 2.6.3, als fertiges Android-Paket (`com.governikus:ausweisapp`) und als iOS-Swift-Package (`https://github.com/Governikus/AusweisApp2-SDK-iOS`) ein. Das SDK ist nicht Teil dieses Repositorys; die Build-Werkzeuge laden es beim Bau der App. Der Quellcode des SDK steht unter der EUPL 1.2.
+The plugin integrates the Governikus AusweisApp SDK, version 2.6.3, as a prebuilt Android package (`com.governikus:ausweisapp`) and as an iOS Swift package (`https://github.com/Governikus/AusweisApp2-SDK-iOS`). The SDK is not part of this repository; the build tools download it when the app is built. The source code of the SDK is licensed under the EUPL 1.2.
 
-Wer eine App mit diesem Plugin ausliefert, verbreitet damit eine Kopie des SDK. Dafür gelten die Pflichten aus Artikel 5 der EUPL. Die App muss deshalb:
+Whoever ships an app with this plugin thereby distributes a copy of the SDK. The obligations under Article 5 of the EUPL apply to this. The app must therefore:
 
-1. die Urheber- und Lizenzhinweise des SDK beifügen,
-2. den Lizenztext mitliefern,
-3. auf den Quellcode des SDK verweisen: `https://github.com/Governikus/AusweisApp`.
+1. include the SDK's copyright and license notices,
+2. include the license text,
+3. refer to the SDK's source code: `https://github.com/Governikus/AusweisApp`.
 
-Die Lizenzbestimmungen, die Governikus dem SDK beilegt, liegen in diesem Repository unter `AusweisApp-community/LICENSE.txt`. Im selben Ordner liegt unter `AusweisApp-community/docs/sdk/` die Protokoll-Dokumentation des SDK, nach der das Plugin geschrieben ist; sie stammt aus dem Governikus-Repository und steht ebenfalls unter der EUPL 1.2.
+The license terms that Governikus includes with the SDK are in this repository at `AusweisApp-community/LICENSE.txt`. In the same folder, under `AusweisApp-community/docs/sdk/`, is the SDK's protocol documentation, which the plugin was written against; it comes from the Governikus repository and is also licensed under the EUPL 1.2.
 
-## Zusatzvereinbarungen zur AusweisApp
+## Additional agreements on the AusweisApp
 
-Dem iOS-Binärpaket liegt eine Fassung bei, die zusätzlich zur EUPL „Zusatzvereinbarungen zur AusweisApp“ enthält. Sie liegt in diesem Repository unter `AusweisApp-community/LICENSE.officially.txt`, Abschnitt B. Nach Paragraph 3 dienen die AusweisApp und alle ihre Bestandteile ausschließlich der Online-Ausweisfunktion, und nach Paragraph 6 sind die Zeichen „AusweisApp“ und die zugehörigen Grafiken als Marken des Bundes geschützt. Paragraph 1 Absatz 3 hält fest, dass die Zusatzvereinbarungen die Rechte und Pflichten aus der EUPL unberührt lassen. Lesen Sie den Abschnitt vollständig, bevor Sie eine App ausliefern.
+The iOS binary package comes with a version that contains "Zusatzvereinbarungen zur AusweisApp" (additional agreements on the AusweisApp) in addition to the EUPL. It is in this repository at `AusweisApp-community/LICENSE.officially.txt`, Section B. Under Paragraph 3, the AusweisApp and all its components serve exclusively the online ID function, and under Paragraph 6, the marks "AusweisApp" and the associated graphics are protected as trademarks of the German federal government. Paragraph 1, subparagraph 3 states that the additional agreements leave the rights and obligations under the EUPL unaffected. Read the section in full before you ship an app.
 
-## Was für Ihre App offen bleibt
+## What remains open for your app
 
-Die Copyleft-Klausel der EUPL gilt für Kopien und Bearbeitungen. Wann eigener Code als Bearbeitung gilt, lässt die EUPL ausdrücklich offen und verweist auf das anwendbare Urheberrecht.
+The copyleft clause of the EUPL applies to copies and modifications. When your own code counts as a modification is expressly left open by the EUPL, which refers to the applicable copyright law.
 
-Das Plugin verändert das SDK nicht und spricht es nur über die dokumentierte JSON-Schnittstelle an. Es ist nach der Protokoll-Dokumentation des SDK entworfen und nicht aus dem Code der offiziellen Wrapper von Governikus übertragen.
+The plugin does not modify the SDK and addresses it only through the documented JSON interface. It was designed according to the SDK's protocol documentation and was not carried over from the code of the official Governikus wrappers.
 
-**Ob eine App, die dieses Plugin und damit das SDK einbindet, selbst quelloffen sein muss, beantwortet dieses Dokument nicht.** Klären Sie diese Frage vor der Veröffentlichung Ihrer App mit Ihrer Rechtsabteilung und am besten direkt mit Governikus.
+**Whether an app that integrates this plugin, and with it the SDK, must itself be open source is not answered by this document.** Clarify this question with your legal department before publishing your app, ideally directly with Governikus.

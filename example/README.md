@@ -1,60 +1,62 @@
 # flutter_ausweisapp_example
 
-Die Beispiel-App ist eine einfache Testoberfläche für das Plugin `flutter_ausweisapp`. Sie stößt alle Abläufe an (Authentisierung, PIN-Änderung, PIN, CAN, PUK, Zugriffsrechte) und zeigt jedes Ereignis des Plugins im Abschnitt „Protokoll" an. Mit ihr führen Sie auch die Prüfliste `../docs/geraetetest.md` auf echten Geräten durch.
+Deutsche Fassung: [README.de.md](README.de.md)
 
-Voreingestellt ist der Governikus-Testdienst `https://test.governikus-eid.de/Autent-DemoApplication/api/eid/request` mit eingeschaltetem Entwicklermodus.
+The example app is a simple test interface for the plugin `flutter_ausweisapp`. It triggers all flows (authentication, PIN change, PIN, CAN, PUK, access rights) and shows every plugin event in the "Protokoll" (log) section. You also use it to work through the checklist `../docs/device-test.md` on real devices.
 
-## Auf einem Android-Gerät starten
+The default is the Governikus test service `https://test.governikus-eid.de/Autent-DemoApplication/api/eid/request` with developer mode switched on.
 
-1. Das Gerät per USB anschließen, Entwickleroptionen und USB-Debugging einschalten. Das Gerät muss NFC mit Extended Length unterstützen.
-2. `flutter devices` zeigt die Geräte-ID.
-3. Im Verzeichnis `example/` ausführen: `flutter run --release -d <Geräte-ID>`.
+## Running on an Android device
 
-Die Release-Variante ist mit dem Debug-Schlüssel signiert, damit sie sich ohne eigene Signierung starten lässt.
+1. Connect the device over USB and enable developer options and USB debugging. The device must support NFC with extended length.
+2. `flutter devices` shows the device ID.
+3. In the `example/` directory, run: `flutter run --release -d <device ID>`.
 
-## Auf einem iPhone starten
+The release variant is signed with the debug key so that it can be started without signing of your own.
 
-Die App ist nicht für Ihr Apple-Team signiert. Richten Sie vor dem ersten Start Folgendes ein:
+## Running on an iPhone
 
-1. `example/ios/Runner.xcworkspace` in Xcode öffnen.
-2. Im Ziel „Runner" unter „Signing & Capabilities" Ihr eigenes Team wählen und eine eigene, eindeutige Bundle-ID eintragen (die voreingestellte gehört nicht Ihnen).
-3. Dort die Fähigkeit „Near Field Communication Tag Reading" hinzufügen. Sie muss auch am App-Identifier im Apple-Entwicklerkonto aktiv sein. Die Datei `example/ios/Runner/Runner.entitlements` enthält den dazu passenden Eintrag `TAG` bereits, die `Info.plist` die Kartenkennung und den Nutzungstext.
-4. Das iPhone anschließen, `flutter devices` zeigt die Geräte-ID. Im Verzeichnis `example/` ausführen: `flutter run --release -d <Geräte-ID>`.
+The app is not signed for your Apple team. Before the first launch, set up the following:
 
-Das iPhone braucht iOS 17.0 oder neuer. Die Beispiel-App schaltet Swift Package Manager in ihrer `pubspec.yaml` ein (`flutter` → `config` → `enable-swift-package-manager: true`).
+1. Open `example/ios/Runner.xcworkspace` in Xcode.
+2. In the "Runner" target under "Signing & Capabilities", choose your own team and enter your own, unique bundle ID (the preset one does not belong to you).
+3. Add the capability "Near Field Communication Tag Reading" there. It must also be enabled for the app identifier in the Apple developer account. The file `example/ios/Runner/Runner.entitlements` already contains the matching entry `TAG`, and the `Info.plist` the card identifier and the usage text.
+4. Connect the iPhone; `flutter devices` shows the device ID. In the `example/` directory, run: `flutter run --release -d <device ID>`.
 
-Hinweis zum Bauen am 24.11.2026: Mit Flutter 3.41.7 und Xcode 27.2 schlägt `flutter build ios --simulator` fehl (Flutters Aufruf `lipo -verify_arch` wird abgelehnt), auch für eine leere App. Starts auf einen konkreten Simulator oder ein Gerät (`flutter run -d <Geräte-ID>`) funktionieren.
+The iPhone needs iOS 17.0 or newer. The example app enables Swift Package Manager in its `pubspec.yaml` (`flutter` → `config` → `enable-swift-package-manager: true`).
 
-## Bedienung
+Note on building on November 24, 2026: with Flutter 3.41.7 and Xcode 27.2, `flutter build ios --simulator` fails (Flutter's call to `lipo -verify_arch` is rejected), even for an empty app. Starts on a specific simulator or a device (`flutter run -d <device ID>`) work.
 
-1. „SDK starten" antippen; oben steht dann „SDK läuft".
-2. „Authentisierung starten" antippen, die Ereignisse erscheinen im Protokoll.
-3. PIN, CAN und PUK tragen Sie im Feld „Eingabe" ein und senden sie mit den vier Schaltflächen darunter.
+## Usage
 
-Unter iOS steht im Abschnitt „PIN, CAN, PUK" zusätzlich der Schalter „NFC-Dialog bei PIN-, CAN- und PUK-Abfrage automatisch schließen". Er ist voreingestellt an und sendet `INTERRUPT`, sobald das SDK nach PIN, CAN, PUK oder neuer PIN fragt. Sonst bleibt der NFC-Dialog des Systems offen, und die App lässt sich darunter nicht bedienen (auf einem iPhone 16 Pro mit iOS 27.2.1 bestätigt). Mehr dazu steht im Abschnitt „Der NFC-Dialog unter iOS und `interrupt()`" der `README.md` des Plugins.
+1. Tap "SDK starten" (start the SDK); the top of the screen then shows "SDK läuft" (SDK is running).
+2. Tap "Authentisierung starten" (start authentication); the events appear in the log.
+3. You enter PIN, CAN and PUK in the "Eingabe" (input) field and send them with the four buttons below it.
 
-Das Protokoll zeigt zu jedem Ereignis die wichtigsten Felder, etwa `retryCounter` oder das Ergebnis einer Authentisierung. Adressen zeigt es nicht, weil sie ein Sitzungs-Token enthalten können, sondern nur, ob eine vorhanden ist.
+On iOS, the "PIN, CAN, PUK" section additionally contains the switch "NFC-Dialog bei PIN-, CAN- und PUK-Abfrage automatisch schließen" (automatically close the NFC dialog when a PIN, CAN or PUK is requested). It is on by default and sends `INTERRUPT` as soon as the SDK asks for a PIN, CAN, PUK or new PIN. Otherwise, the system's NFC dialog stays open, and the app cannot be operated underneath it (confirmed on an iPhone 16 Pro with iOS 27.2.1). For more on this, see the section "The NFC dialog on iOS and `interrupt()`" in the plugin's `README.md`.
 
-Mit der Simulator-Karte des SDK (Schaltfläche „Simulator-Karte einlegen") läuft eine ganze Authentisierung ohne echten Ausweis. Lassen Sie dann das Feld „Eingabe" **leer** und tippen Sie „als PIN senden": Der Simulator meldet sich als Leser mit eigener Tastatur, und das SDK lehnt jede PIN mit Wert ab.
+For each event, the log shows the most important fields, such as `retryCounter` or the result of an authentication. It does not show addresses, because they can contain a session token, but only whether one is present.
 
-## Anmeldung im Browser
+With the SDK's simulator card (button "Simulator-Karte einlegen", insert the simulator card), a whole authentication runs without a real ID card. In that case, leave the "Eingabe" field **empty** and tap "als PIN senden" (send as PIN): the simulator reports itself as a reader with its own keypad, and the SDK rejects every PIN that has a value.
 
-Mit dem Abschnitt „Anmeldung im Browser“ prüfen Sie den Ablauf gegen einen echten Dienst, zum Beispiel einen Login, der zur Online-Ausweisfunktion weiterleitet. Am Governikus-Testdienst gelingt die Authentisierung nur mit einer Testkarte; ein echter Personalausweis braucht einen Produktivdienst.
+## Login in the browser
 
-1. Die Adresse des Logins im Feld „Login-Adresse“ eintragen.
-2. „Im Browser anmelden“ antippen. Die App öffnet die Seite in einer eingebetteten Web-Ansicht.
-3. Auf der Seite die Anmeldung mit dem Online-Ausweis wählen. Sobald die Seite den Ausweis-Client starten will, schließt die App die Web-Ansicht, startet bei Bedarf das SDK und beginnt die Authentisierung.
-4. Wie gewohnt „Akzeptieren“ antippen, den Ausweis anhalten und die PIN senden.
-5. Nach einer erfolgreichen Authentisierung öffnet die App die Rückkehr-Adresse in derselben Web-Ansicht. Dort schließt der Dienst den Login ab. Scheitert die Authentisierung, bleibt die App beim Protokoll, damit der Grund sichtbar ist, und öffnet die Rückkehr-Adresse nicht.
-6. Leitet der Dienst am Ende auf das Schema einer App weiter (zum Beispiel `de.example.app:/oauth2redirect?code=…`), schließt die Beispiel-App die Web-Ansicht und meldet im Protokoll `Weiterleitung an eine App empfangen` mit dem Schema und den Namen der Parameter. Die Werte zeigt sie nicht. In Ihrer App fangen Sie diese Weiterleitung ab und schließen damit den Login ab.
+With the section "Anmeldung im Browser" (login in the browser), you test the flow against a real service, for example a login that redirects to the eID function. At the Governikus test service, authentication succeeds only with a test card; a real ID card needs a production service.
 
-Die Anmeldung im Browser startet die Authentisierung immer ohne Entwicklermodus, unabhängig vom Schalter: Das SDK lehnt einen Produktivdienst im Entwicklermodus sofort ab. Der Schalter gilt nur für „Authentisierung starten“.
+1. Enter the address of the login in the "Login-Adresse" (login address) field.
+2. Tap "Im Browser anmelden" (log in in the browser). The app opens the page in an embedded web view.
+3. On the page, choose to log in with the eID. As soon as the page wants to start the ID client, the app closes the web view, starts the SDK if necessary and begins the authentication.
+4. As usual, tap "Akzeptieren" (accept), hold the ID card against the device and send the PIN.
+5. After a successful authentication, the app opens the return address in the same web view. There, the service completes the login. If the authentication fails, the app stays on the log so that the reason is visible and does not open the return address.
+6. If the service finally redirects to an app's scheme (for example `de.example.app:/oauth2redirect?code=…`), the example app closes the web view and reports `Weiterleitung an eine App empfangen` (redirect to an app received) in the log, with the scheme and the names of the parameters. It does not show the values. In your app, you intercept this redirect and use it to complete the login.
 
-Die App erkennt den Start des Ausweis-Clients an einem Link der Form `…/eID-Client?tcTokenURL=https://…`. Startet ein Dienst den Client auf anderem Weg, greift die Übernahme nicht; ob ein bestimmter Dienst diesen Weg zulässt, müssen Sie mit dessen Betreiber klären.
+Login in the browser always starts the authentication without developer mode, regardless of the switch: the SDK immediately rejects a production service in developer mode. The switch applies only to "Authentisierung starten".
 
-Die Web-Ansicht ist nur ein Hilfsmittel der Beispiel-App. Das Plugin selbst enthält keine Web-Ansicht; in Ihrer App bauen Sie diesen Teil selbst.
+The app recognizes the start of the ID client by a link of the form `…/eID-Client?tcTokenURL=https://…`. If a service starts the client in another way, the takeover does not work; whether a particular service permits this route must be clarified with its operator.
+
+The web view is only a helper of the example app. The plugin itself contains no web view; in your app, you build this part yourself.
 
 ## Tests
 
-- `flutter test` im Verzeichnis `example/` führt die Widget-Tests aus.
-- `flutter test integration_test -d <Geräte-ID>` führt die Integrationstests aus; der Test mit der Simulator-Karte braucht Netzzugriff auf den Governikus-Testdienst.
+- `flutter test` in the `example/` directory runs the widget tests.
+- `flutter test integration_test -d <device ID>` runs the integration tests; the test with the simulator card needs network access to the Governikus test service.

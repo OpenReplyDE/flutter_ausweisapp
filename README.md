@@ -1,34 +1,36 @@
 # flutter_ausweisapp
 
-`flutter_ausweisapp` bindet das AusweisApp-SDK von Governikus (Version 2.6.3) in Flutter-Apps für Android und iOS ein. Damit kann sich eine Nutzerin oder ein Nutzer mit dem Online-Ausweis authentisieren, ohne die App zu verlassen: Das SDK liest die Karte per NFC, die App zeigt alle Dialoge (PIN, CAN, PUK, Zugriffsrechte) auf ihren eigenen Screens. Das Plugin bringt keine Oberfläche mit. Es reicht die JSON-Kommandos und -Nachrichten des SDK an Dart durch und stellt sie als typisierte Methoden und als Ereignis-Stream bereit.
+Deutsche Fassung: [README.de.md](README.de.md)
 
-**Wichtig: Echtes NFC ist bisher ungetestet.** Emulator und Simulator haben kein NFC. Die Simulator-Karte des SDK umgeht das Lesen der Karte vollständig. Alles, was NFC berührt (Karte anlegen, Karte wegziehen, Hintergrund, NFC-Dialog unter iOS), gilt erst als geprüft, wenn die Prüfliste in `docs/geraetetest.md` auf echten Geräten durchlaufen wurde.
+`flutter_ausweisapp` integrates the Governikus AusweisApp SDK (version 2.6.3) into Flutter apps for Android and iOS. With it, a user can authenticate with the German eID (Online-Ausweis) without leaving the app: the SDK reads the card over NFC, and the app shows all dialogs (PIN, CAN, PUK, access rights) on its own screens. The plugin ships no user interface. It passes the SDK's JSON commands and messages through to Dart and exposes them as typed methods and as an event stream.
 
-## Inhalt
+**Status of the device tests.** On iOS, the plugin has been tested on an iPhone 16 Pro with iOS 27.2.1 and a real ID card, including a complete login against a production service; the results are in `docs/device-test.md`. **On Android, real NFC is still untested:** the emulator and the simulator have no NFC, and the SDK's simulator card bypasses reading the card entirely. Everything that involves NFC on Android counts as verified only once the checklist has been completed there on a real device.
 
-- [Nutzung](#nutzung)
-- [Einrichtung Android](#einrichtung-android)
-- [Einrichtung iOS](#einrichtung-ios)
-- [Plattformunterschiede](#plattformunterschiede)
-- [Lebenszyklus und Fehler](#lebenszyklus-und-fehler)
-- [Umgang mit PIN, CAN und PUK](#umgang-mit-pin-can-und-puk)
-- [Simulator-Karte](#simulator-karte)
-- [Entwicklung](#entwicklung)
-- [SDK-Update](#sdk-update)
-- [Abgrenzung: Login-Ablauf der App](#abgrenzung-login-ablauf-der-app)
-- [Lizenz](#lizenz)
+## Contents
 
-## Nutzung
+- [Usage](#usage)
+- [Android setup](#android-setup)
+- [iOS setup](#ios-setup)
+- [Platform differences](#platform-differences)
+- [Lifecycle and errors](#lifecycle-and-errors)
+- [Handling PIN, CAN and PUK](#handling-pin-can-and-puk)
+- [Simulator card](#simulator-card)
+- [Development](#development)
+- [SDK update](#sdk-update)
+- [Scope: the app's login flow](#scope-the-apps-login-flow)
+- [License](#license)
 
-Das Plugin wird über einen Pfad- oder Git-Eintrag in der `pubspec.yaml` der App eingebunden (es ist nicht auf pub.dev veröffentlicht). Danach genügt ein Import:
+## Usage
+
+Add the plugin through a path or Git entry in the app's `pubspec.yaml` (it is not published on pub.dev). After that, one import is enough:
 
 ```dart
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
 ```
 
-Die Klasse `AusweisApp` hat für jedes SDK-Kommando eine Methode. Antworten kommen ausschließlich als Ereignisse über den Stream `events`, benannt nach ihrer Bedeutung (zum Beispiel `PinRequested`).
+The class `AusweisApp` has one method for each SDK command. Responses arrive only as events on the `events` stream, named after their meaning (for example `PinRequested`).
 
-**Abonnieren Sie `events`, bevor Sie `start()` aufrufen.** Der Stream ist ein Broadcast-Stream; Ereignisse ohne Zuhörer gehen verloren.
+**Subscribe to `events` before you call `start()`.** The stream is a broadcast stream; events without a listener are lost.
 
 ```dart
 final eid = AusweisApp();
@@ -38,27 +40,27 @@ final subscription = eid.events.listen((event) {
     case AuthenticationStarted():
       showProgress();
     case AuthenticationStartFailed(:final error):
-      showStartError(error); // RUN_AUTH abgelehnt, etwa wegen der tcTokenURL
+      showStartError(error); // RUN_AUTH rejected, for example because of the tcTokenURL
     case AccessRightsRequested(:final rights):
-      showRights(rights); // danach eid.accept() oder eid.cancel()
+      showRights(rights); // afterwards eid.accept() or eid.cancel()
     case InsertCardRequested():
       showCardHint();
     case PinRequested(:final reader):
-      eid.interrupt(); // schließt unter iOS den NFC-Dialog, siehe unten
-      showPinScreen(reader.card?.retryCounter); // danach eid.setPin(...)
+      eid.interrupt(); // closes the NFC dialog on iOS, see below
+      showPinScreen(reader.card?.retryCounter); // afterwards eid.setPin(...)
     case CanRequested():
       eid.interrupt();
-      showCanScreen(); // danach eid.setCan(...)
+      showCanScreen(); // afterwards eid.setCan(...)
     case PukRequested():
       eid.interrupt();
-      showPukScreen(); // danach eid.setPuk(...)
+      showPukScreen(); // afterwards eid.setPuk(...)
     case NewPinRequested():
       eid.interrupt();
-      showNewPinScreen(); // danach eid.setNewPin(...)
+      showNewPinScreen(); // afterwards eid.setNewPin(...)
     case Paused():
-      showReposition(); // danach eid.continueWorkflow()
+      showReposition(); // afterwards eid.continueWorkflow()
     case AuthenticationCompleted(:final result):
-      // Die URL meldet das Ergebnis an den Dienst, auch einen Fehler.
+      // The URL reports the result to the service, including a failure.
       if (result.url case final url?) openResultUrl(url);
       showResult(result.isSuccess);
     case ChangePinCompleted(:final success):
@@ -72,50 +74,50 @@ await eid.start();
 await eid.startAuthentication(tcTokenUrl: Uri.parse(tcTokenUrl));
 ```
 
-Die `showXyz`-Funktionen und `openResultUrl` sind Platzhalter für Ihre eigenen Screens und Ihren eigenen Ablauf. Das SDK liefert am Ende einer Authentisierung in `result.url` eine Adresse, die die App aufrufen soll, und zwar bei Erfolg und bei einem Fehler: Über sie erfährt der Dienst das Ergebnis. `tcTokenUrl` ist die Adresse, die der eID-Server der Gegenstelle liefert. Kommt sie als eID-Client-Link (`…/eID-Client?tcTokenURL=…`) aus einem Web-Ablauf, liest `tcTokenUrlFromEidClientLink(Uri)` sie heraus und gibt `null` zurück, wenn der Link nicht passt oder die Adresse nicht mit `https` beginnt.
+The `showXyz` functions and `openResultUrl` are placeholders for your own screens and your own flow. At the end of an authentication, the SDK returns an address in `result.url` that the app is supposed to call, both on success and on failure: this is how the service learns the result. `tcTokenUrl` is the address supplied by the counterpart's eID server. If it arrives as an eID client link (`…/eID-Client?tcTokenURL=…`) from a web flow, `tcTokenUrlFromEidClientLink(Uri)` extracts it and returns `null` if the link does not match or the address does not start with `https`.
 
-Zum Aufräumen rufen Sie `await eid.stop()` und danach `eid.dispose()` auf. Weitere Möglichkeiten:
+To clean up, call `await eid.stop()` and then `eid.dispose()`. Further options:
 
-- `startChangePin()` startet eine PIN-Änderung (auch für die fünfstellige Transport-PIN).
-- `setAccessRights(...)` schränkt die optionalen Zugriffsrechte ein, `getCertificate()` liefert das Zertifikat der Gegenstelle.
-- `rawMessages` liefert jede Nachricht des SDK unverändert, `sendRaw(map)` sendet ein Kommando, das die typisierte API noch nicht kennt.
-- `logger:` im Konstruktor schreibt Kommandos und Nachrichten mit, siehe unten.
+- `startChangePin()` starts a PIN change (also for the five-digit transport PIN).
+- `setAccessRights(...)` restricts the optional access rights, `getCertificate()` returns the counterpart's certificate.
+- `rawMessages` delivers every SDK message unchanged, `sendRaw(map)` sends a command that the typed API does not know yet.
+- `logger:` in the constructor logs commands and messages, see below.
 
-### Der NFC-Dialog unter iOS und `interrupt()`
+### The NFC dialog on iOS and `interrupt()`
 
-Unter iOS zeigt das System einen eigenen NFC-Dialog, solange das SDK die Karte liest. Laut SDK-Dokumentation schließt das SDK diesen Dialog nicht von selbst, wenn es nach PIN, CAN, PUK oder neuer PIN fragt (`PinRequested`, `CanRequested`, `PukRequested`, `NewPinRequested`). Die App muss ihn dann mit `eid.interrupt()` schließen, bevor sie ihren Eingabe-Screen zeigt; sonst liegt der Dialog über diesem Screen. Unter Android sendet `interrupt()` nichts, der Aufruf kann also auf beiden Plattformen stehen.
+On iOS, the system shows its own NFC dialog while the SDK reads the card. According to the SDK documentation, the SDK does not close this dialog by itself when it asks for a PIN, CAN, PUK or new PIN (`PinRequested`, `CanRequested`, `PukRequested`, `NewPinRequested`). The app must then close it with `eid.interrupt()` before it shows its input screen; otherwise the dialog stays on top of that screen. On Android, `interrupt()` sends nothing, so the call can stay in the code for both platforms.
 
-`interrupt()` ist nur direkt nach einem dieser vier Ereignisse erlaubt. Zu jedem anderen Zeitpunkt, etwa während `InsertCardRequested`, antwortet das SDK mit dem Ereignis `BadState`.
+`interrupt()` is allowed only directly after one of these four events. At any other time, for example during `InsertCardRequested`, the SDK responds with the event `BadState`.
 
-Auf einem iPhone 16 Pro mit iOS 27.2.1 ist das bestätigt: Der Dialog bleibt nach `PinRequested` offen, und die App lässt sich darunter nicht bedienen. Schließt die Nutzerin oder der Nutzer den Dialog über dessen eigene Schaltfläche, bricht das SDK den Ablauf ab und meldet `AuthenticationCompleted` mit `reason: User_Cancelled`.
+This is confirmed on an iPhone 16 Pro with iOS 27.2.1: the dialog stays open after `PinRequested`, and the app cannot be operated underneath it. If the user closes the dialog with its own button, the SDK aborts the flow and reports `AuthenticationCompleted` with `reason: User_Cancelled`.
 
-### Die App ohne Gerät testen
+### Testing the app without a device
 
-`package:flutter_ausweisapp/testing.dart` enthält `FakeAusweisAppTransport`. Mit `AusweisApp(transport: fake)` lassen sich die eigenen Screens in Widget-Tests prüfen, ohne SDK und ohne Gerät.
+`package:flutter_ausweisapp/testing.dart` contains `FakeAusweisAppTransport`. With `AusweisApp(transport: fake)`, you can test your own screens in widget tests, without the SDK and without a device.
 
-## Einrichtung Android
+## Android setup
 
-1. **minSdk 28.** Das SDK braucht minSdk 28. Setzen Sie `minSdk = 28` (oder höher) in `android/app/build.gradle.kts` der App.
-2. **Eigene `Application`-Klasse anpassen.** Das SDK läuft in einem eigenen Prozess, dessen Name auf `ausweisapp2_service` endet, und erzeugt dort die `Application`-Klasse der App ein zweites Mal. Hat Ihre App eine eigene `Application`-Klasse mit Initialisierungen (zum Beispiel Firebase), muss sie diese in diesem Prozess überspringen:
+1. **minSdk 28.** The SDK needs minSdk 28. Set `minSdk = 28` (or higher) in the app's `android/app/build.gradle.kts`.
+2. **Adapt your own `Application` class.** The SDK runs in a separate process whose name ends in `ausweisapp2_service`, and it creates the app's `Application` class a second time there. If your app has its own `Application` class with initializations (for example Firebase), it must skip them in this process:
 
    ```kotlin
    class MyApp : Application() {
        override fun onCreate() {
            super.onCreate()
            if (Application.getProcessName().endsWith("ausweisapp2_service")) return
-           // Einmalige Initialisierung der App, zum Beispiel Firebase.
+           // One-time initialization of the app, for example Firebase.
        }
    }
    ```
 
-   Ohne eigene `Application`-Klasse ist nichts zu tun.
-3. **Geräte.** Das SDK unterstützt nur Android-Geräte mit Extended-Length-NFC. Auf anderen Geräten lässt sich der Ausweis nicht lesen.
+   Without your own `Application` class, there is nothing to do.
+3. **Devices.** The SDK supports only Android devices with extended-length NFC. On other devices, the ID card cannot be read.
 
-Das Plugin bindet den SDK-Dienst selbst. Die Berechtigung `android.permission.NFC` und der Dienst kommen über das Android-Paket des SDK in die App. Den NFC-Lesemodus schaltet das Plugin selbst ein und aus, solange das SDK läuft und die Activity im Vordergrund ist; Ihre App braucht dafür keinen eigenen nativen Code.
+The plugin binds the SDK service itself. The permission `android.permission.NFC` and the service reach the app through the SDK's Android package. The plugin itself switches the NFC reader mode on and off while the SDK is running and the activity is in the foreground; your app needs no native code of its own for this.
 
-## Einrichtung iOS
+## iOS setup
 
-1. **Swift Package Manager einschalten.** Das Plugin unterstützt unter iOS nur Swift Package Manager (es gibt kein Podspec). Aktivieren Sie ihn in der `pubspec.yaml` der App, ohne die globale Flutter-Konfiguration zu ändern:
+1. **Enable Swift Package Manager.** On iOS, the plugin supports only Swift Package Manager (there is no podspec). Enable it in the app's `pubspec.yaml`, without changing the global Flutter configuration:
 
    ```yaml
    flutter:
@@ -123,10 +125,10 @@ Das Plugin bindet den SDK-Dienst selbst. Die Berechtigung `android.permission.NF
        enable-swift-package-manager: true
    ```
 
-   Plugins Ihrer App, die noch kein Swift Package anbieten, bindet Flutter weiterhin über CocoaPods ein. Die Umstellung muss nicht in einem Schritt erfolgen.
-2. **Mindestversion iOS 17.0.** Setzen Sie das Deployment Target der App auf mindestens 17.0.
-3. **NFC-Entitlement.** Die App braucht in ihrer `Runner.entitlements` den Eintrag `com.apple.developer.nfc.readersession.formats` mit dem Wert `TAG`. Dazu muss die Fähigkeit „Near Field Communication Tag Reading" am App-Identifier im Apple-Entwicklerkonto aktiv sein.
-4. **Zwei Einträge in der `Info.plist`.**
+   Flutter keeps integrating plugins of your app that do not offer a Swift package yet through CocoaPods. The switch does not have to happen in one step.
+2. **Minimum version iOS 17.0.** Set the app's deployment target to at least 17.0.
+3. **NFC entitlement.** The app needs the entry `com.apple.developer.nfc.readersession.formats` with the value `TAG` in its `Runner.entitlements`. For this, the capability "Near Field Communication Tag Reading" must be enabled for the app identifier in the Apple developer account.
+4. **Two entries in the `Info.plist`.**
 
    ```xml
    <key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
@@ -137,75 +139,79 @@ Das Plugin bindet den SDK-Dienst selbst. Die Berechtigung `android.permission.NF
    <string>Die App liest per NFC Ihren Personalausweis, um Sie online auszuweisen.</string>
    ```
 
-   Der Text unter `NFCReaderUsageDescription` erscheint dem Nutzer; passen Sie ihn an Ihre App an.
+   The text under `NFCReaderUsageDescription` is shown to the user; adapt it to your app.
 
-Bekannte Einschränkung beim Bauen: Mit Flutter 3.41.7 und Xcode 27.2 schlägt `flutter build ios --simulator` für jede App fehl, auch für eine leere (beobachtet am 24.11.2026; Flutters Aufruf `lipo -verify_arch` wird abgelehnt). Builds für einen konkreten Simulator oder ein Gerät funktionieren, etwa `flutter run -d <id>`.
+Known build limitation: with Flutter 3.41.7 and Xcode 27.2, `flutter build ios --simulator` fails for every app, even an empty one (observed on November 24, 2026; Flutter's call to `lipo -verify_arch` is rejected). Builds for a specific simulator or a device work, for example `flutter run -d <id>`.
 
-**Mehrere Flutter-Engines.** Das SDK existiert unter iOS einmal pro Prozess. Ruft eine zweite Engine `start()` auf, übernimmt sie die Nachrichten, und die erste Engine erfährt davon nichts. Nutzen Sie das Plugin aus einer einzigen Engine.
+**Multiple Flutter engines.** On iOS, the SDK exists once per process. If a second engine calls `start()`, it takes over the messages, and the first engine does not learn about it. Use the plugin from a single engine.
 
-## Plattformunterschiede
+## Platform differences
 
-| Funktion | Android | iOS |
+| Feature | Android | iOS |
 | --- | --- | --- |
-| `userInfoMessages` bei `startAuthentication` und `startChangePin` (Texte des NFC-Dialogs) | ohne Wirkung | wirkt |
-| `interrupt()` (schließt den NFC-Dialog) | sendet nichts | wirkt |
-| Ereignis `Disconnected` (Verbindung zum SDK verloren) | wird gemeldet | wird nicht gemeldet |
-| NFC-Dialog | – | zeigt iOS selbst; seine Texte kommen über `userInfoMessages` |
+| `userInfoMessages` in `startAuthentication` and `startChangePin` (texts of the NFC dialog) | no effect | takes effect |
+| `interrupt()` (closes the NFC dialog) | sends nothing | takes effect |
+| Event `Disconnected` (connection to the SDK lost) | is reported | is not reported |
+| NFC dialog | – | shown by iOS itself; its texts come through `userInfoMessages` |
+| ID card is pulled away while it is being read | not yet tested on a device | no `Paused`; the flow ends with an unsuccessful `AuthenticationCompleted`, and the login has to start over (observed on an iPhone) |
 
-Besonderheiten unter Android:
+Android specifics:
 
-- Nach `stop()` beendet das SDK seinen eigenen Prozess. Ein `start()` direkt danach wartet bis zu 3 Sekunden, bis dieser Prozess beendet ist, und bindet erst dann neu. Sonst würde Android den Dienst erst nach einer Wartezeit von etwa 10 Sekunden neu starten.
-- Bekannte Grenze: Wird das Plugin an eine Activity gehängt, die schon im Vordergrund ist (Add-to-App mit einem später eingefügten `FlutterFragment`), schaltet sich der NFC-Lesemodus erst nach dem nächsten Pausieren und Fortsetzen ein. Mit einer normalen `FlutterActivity` tritt das nicht auf.
+- After `stop()`, the SDK terminates its own process. A `start()` directly afterwards waits up to 3 seconds for this process to end and only then binds again. Otherwise, Android would restart the service only after a delay of about 10 seconds.
+- Known limitation: if the plugin is attached to an activity that is already in the foreground (add-to-app with a `FlutterFragment` inserted later), the NFC reader mode switches on only after the next pause and resume. This does not occur with a regular `FlutterActivity`.
 
-## Lebenszyklus und Fehler
+## Lifecycle and errors
 
-- **Nur ein `AusweisApp` zur gleichen Zeit.** Das SDK existiert einmal pro Prozess. Zwei Objekte, die gleichzeitig arbeiten, werden nicht unterstützt. Ereignisse erhält immer das Objekt, das zuletzt `start()` aufgerufen hat. Der übliche Wechsel zwischen zwei Screens funktioniert trotzdem: Hat der neue Screen bei seinem `AusweisApp` schon `start()` aufgerufen, wenn der alte Screen `dispose()` aufruft, stoppt das alte Objekt das SDK des neuen nicht.
-- `start()` hat eine Frist von standardmäßig 15 Sekunden und wirft `AusweisAppStartException` (Codes `start_failed`, `timeout`, `api_level`). Der erste Schritt von `start()` stellt das API-Level 3 ein.
-- `stop()` wartet höchstens 15 Sekunden und wirft sonst `AusweisAppTransportException` (Code `timeout`). Läuft noch ein Stoppen, zum Beispiel nach einem gescheiterten `start()`, wartet `stop()` auf dieses.
-- `dispose()` löst das Stoppen aus, wartet aber nicht darauf. Das ist für `State.dispose()` gedacht, das nicht warten kann. Ein neues `AusweisApp`, das danach startet, wartet selbst, bis dieses Stoppen beendet ist.
-- Kommandos bei nicht laufendem SDK werfen `AusweisAppNotRunningException`. Meldet das SDK selbst bei einem Kommando, dass es nicht läuft, wirft das Kommando ebenfalls `AusweisAppNotRunningException`; `isRunning` steht danach auf `false`, und `start()` startet das SDK neu. Transportfehler beim Senden werfen `AusweisAppTransportException`.
-- Fehlermeldungen des SDK (`BAD_STATE`, `INTERNAL_ERROR`, `INVALID`, `UNKNOWN_COMMAND`) kommen als Ereignisse an: `BadState`, `InternalError`, `InvalidCommand`, `UnknownCommand`. Nachrichten, die das Plugin nicht kennt, kommen als `UnknownMessageReceived` mit dem Roh-JSON.
-- Ein fachlich gescheiterter Ablauf (falsche PIN, Abbruch, gesperrte Karte) ist **keine** Ausnahme, sondern ein normales Ereignis, etwa `AuthenticationCompleted` mit einem Ergebnis, dessen `isSuccess` false ist.
+- **Only one `AusweisApp` at a time.** The SDK exists once per process. Two objects working at the same time are not supported. Events always go to the object that called `start()` last. The usual switch between two screens works nonetheless: if the new screen has already called `start()` on its `AusweisApp` when the old screen calls `dispose()`, the old object does not stop the new one's SDK.
+- `start()` has a timeout of 15 seconds by default and throws `AusweisAppStartException` (codes `start_failed`, `timeout`, `api_level`). The first step of `start()` sets API level 3.
+- `stop()` waits at most 15 seconds and otherwise throws `AusweisAppTransportException` (code `timeout`). If a stop is still in progress, for example after a failed `start()`, `stop()` waits for it.
+- `dispose()` triggers the stop but does not wait for it. This is meant for `State.dispose()`, which cannot wait. A new `AusweisApp` that starts afterwards waits by itself until this stop has finished.
+- Commands while the SDK is not running throw `AusweisAppNotRunningException`. If the SDK itself reports in response to a command that it is not running, the command also throws `AusweisAppNotRunningException`; `isRunning` is then `false`, and `start()` restarts the SDK. Transport errors while sending throw `AusweisAppTransportException`.
+- Error messages from the SDK (`BAD_STATE`, `INTERNAL_ERROR`, `INVALID`, `UNKNOWN_COMMAND`) arrive as events: `BadState`, `InternalError`, `InvalidCommand`, `UnknownCommand`. Messages that the plugin does not know arrive as `UnknownMessageReceived` with the raw JSON.
+- A flow that fails for a functional reason (wrong PIN, cancellation, blocked card) is **not** an exception but a normal event, for example `AuthenticationCompleted` with a result whose `isSuccess` is false.
+- After `stop()` in the middle of a flow, no `AuthenticationCompleted` and no `ChangePinCompleted` arrives any more (observed on an iPhone). Do not wait for a completion event after `stop()`.
 
-## Umgang mit PIN, CAN und PUK
+## Handling PIN, CAN and PUK
 
-- Das Plugin schreibt Kommandos mit Geheimnissen nie ins Log. Das Mitschreiben von Kommandos und Nachrichten ist standardmäßig aus (`logger:` im Konstruktor von `AusweisApp`). Wenn Sie es einschalten, ersetzt das Plugin PIN, CAN, PUK und die Werte von HTTP-Headern durch `***`.
-- Adressen ersetzt das Plugin im Log nicht: Die `tcTokenURL` im Kommando `RUN_AUTH` und die Ergebnis-Adresse in der Nachricht `AUTH` stehen im Klartext da. Beide enthalten in der Regel ein Sitzungs-Token. Das Mitschreiben ist deshalb nur für die Entwicklung gedacht; schalten Sie es in ausgelieferten Apps nicht ein.
-- Unter Android überschreibt das Plugin das Zeichenfeld nach dem Senden mit Nullen.
-- Bekannte Grenze: Die Eingabe wird in Flutter als Dart-String erfasst und lässt sich dort nicht gezielt aus dem Speicher löschen. Das gilt für jeden Flutter-Weg.
+- The plugin never writes commands containing secrets to the log. Logging of commands and messages is off by default (`logger:` in the constructor of `AusweisApp`). If you enable it, the plugin replaces PIN, CAN, PUK and the values of HTTP headers with `***`.
+- The plugin does not redact addresses in the log: the `tcTokenURL` in the `RUN_AUTH` command and the result address in the `AUTH` message appear in plain text. Both usually contain a session token. Logging is therefore intended for development only; do not enable it in shipped apps.
+- On Android, the plugin overwrites the character array with zeros after sending.
+- Known limitation: in Flutter, the input is captured as a Dart string and cannot be deliberately erased from memory there. This applies to every Flutter approach.
 
-## Simulator-Karte
+## Simulator card
 
-Das SDK bringt eine virtuelle Karte mit. Sie liegt in einem eingebauten Leser namens `Simulator` und wird mit `eid.setCard('Simulator')` eingelegt, zum Beispiel wenn `InsertCardRequested` kommt. Sie funktioniert nur gegen Testumgebungen, etwa den Governikus-Testdienst `https://test.governikus-eid.de/Autent-DemoApplication/api/eid/request`, und dafür braucht `startAuthentication` den Parameter `developerMode: true`.
+The SDK ships a virtual card. It sits in a built-in reader named `Simulator` and is inserted with `eid.setCard('Simulator')`, for example when `InsertCardRequested` arrives. It works only against test environments, such as the Governikus test service `https://test.governikus-eid.de/Autent-DemoApplication/api/eid/request`, and for that, `startAuthentication` needs the parameter `developerMode: true`.
 
-Der Leser `Simulator` meldet sich als Leser mit eigener Tastatur. PIN, CAN, PUK und neue PIN müssen deshalb **ohne Wert** gesendet werden: `eid.setPin(null)`. Mit einem Wert lehnt das SDK die Eingabe jedes Mal ab.
+The `Simulator` reader reports itself as a reader with its own keypad. PIN, CAN, PUK and new PIN must therefore be sent **without a value**: `eid.setPin(null)`. With a value, the SDK rejects the input every time.
 
-Die Simulator-Karte läuft auch im Emulator und im Simulator, braucht aber Netzzugriff auf den Testdienst.
+The simulator card also runs in the emulator and in the simulator, but it needs network access to the test service.
 
-## Entwicklung
+**Real ID cards need a production service.** At the Governikus test service, a real ID card is read and the PIN is accepted; the flow then ends with the reason `Process_Certificates_From_Eac2_Cvc_Chain_Missing`, because the test service uses test certificates. Conversely, the SDK rejects a production service as long as `developerMode: true` is set, according to the SDK documentation with the reason `Pre_Verification_No_Test_Environment`. For a production service, leave `developerMode` at its default `false`.
 
-Tests in diesem Repository:
+## Development
 
-- `flutter test` im Wurzelverzeichnis führt die Unit-Tests aus, ohne Gerät.
-- `flutter test` im Verzeichnis `example/` führt die Widget-Tests der Beispiel-App aus.
-- `flutter test integration_test -d <Gerät>` im Verzeichnis `example/` führt die Integrationstests auf einem Emulator, Simulator oder Gerät aus. Der Test mit der Simulator-Karte braucht Netzzugriff auf den Governikus-Testdienst.
+Tests in this repository:
 
-Die Beispiel-App in `example/` ist eine einfache Testoberfläche, die alle Abläufe anstößt. Wie Sie sie auf einem Gerät starten, steht in `example/README.md`; die Prüfliste für echte Geräte steht in `docs/geraetetest.md`.
+- `flutter test` in the root directory runs the unit tests, without a device.
+- `flutter test` in the `example/` directory runs the widget tests of the example app.
+- `flutter test integration_test -d <device>` in the `example/` directory runs the integration tests on an emulator, simulator or device. The test with the simulator card needs network access to the Governikus test service.
 
-**Hot Restart.** Nach einem Hot Restart läuft das native SDK weiter. `start()` kehrt dann sofort zurück. Ein laufender Ablauf bleibt bestehen und lässt sich mit `cancel()` beenden.
+The example app in `example/` is a simple test interface that triggers all flows. How to start it on a device is described in `example/README.md`; the checklist for real devices is in `docs/device-test.md`.
 
-## SDK-Update
+**Hot restart.** After a hot restart, the native SDK keeps running. `start()` then returns immediately. A running flow remains active and can be ended with `cancel()`.
 
-Die SDK-Version steht an zwei Stellen: in `android/build.gradle.kts` (`com.governikus:ausweisapp:2.6.3`) und in `ios/flutter_ausweisapp/Package.swift` (`exact: "2.6.3"`). Lesen Sie vor dem Anheben das SDK-Changelog unter `AusweisApp-community/docs/sdk/changelog.rst`, weil das Plugin das Protokoll selbst umsetzt und Änderungen dort nachzieht. Das Plugin stellt beim Start das API-Level 3 ein, damit ein neueres SDK das Verhalten nicht stillschweigend ändert.
+## SDK update
 
-## Abgrenzung: Login-Ablauf der App
+The SDK version appears in two places: in `android/build.gradle.kts` (`com.governikus:ausweisapp:2.6.3`) and in `ios/flutter_ausweisapp/Package.swift` (`exact: "2.6.3"`). Before raising it, read the SDK changelog at `AusweisApp-community/docs/sdk/changelog.rst`, because the plugin implements the protocol itself and has to follow changes there. The plugin sets API level 3 at startup so that a newer SDK does not silently change the behavior.
 
-Dieses Plugin kümmert sich nur um den Kartenzugriff und nimmt eine `tcTokenURL` entgegen. Wie die App diese Adresse aus ihrem Login-Ablauf gewinnt (zum Beispiel aus einem Identity-Provider wie Keycloak mit angebundenem BundID-Konto) und den Login danach abschließt, gehört zur App. Ob der jeweilige Dienst diesen Weg zulässt, müssen Sie mit dessen Betreiber klären. Unabhängig davon lässt sich das Plugin vollständig gegen den Governikus-Testdienst entwickeln.
+## Scope: the app's login flow
 
-## Lizenz
+This plugin only handles card access and accepts a `tcTokenURL`. How the app obtains this address from its login flow (for example from an identity provider such as Keycloak with a connected BundID account) and then completes the login is up to the app. Whether the respective service permits this route must be clarified with its operator. Independently of that, the plugin can be developed entirely against the Governikus test service.
+
+## License
 
 Copyright © 2026 Open Reply GmbH.
 
-Das Plugin steht unter der Open-Source-Lizenz für die Europäische Union (EUPL) in Version 1.2. Der Lizenztext steht in der Datei `LICENSE`.
+The plugin is licensed under the European Union Public Licence (EUPL), version 1.2. The license text is in the file `LICENSE`.
 
-Das eingebundene AusweisApp-SDK von Governikus steht ebenfalls unter der EUPL 1.2. Wer eine App mit diesem Plugin ausliefert, verbreitet das SDK mit. Was dabei zu beachten ist, steht in `NOTICE.md`.
+The bundled Governikus AusweisApp SDK is also licensed under the EUPL 1.2. Whoever ships an app with this plugin distributes the SDK along with it. What to observe in that case is described in `NOTICE.md`.

@@ -1,6 +1,8 @@
 # Gerätetest: Prüfliste für Android und iOS
 
-Diese Liste führen Sie auf echten Geräten mit der Beispiel-App aus `example/` durch. Sie ist nötig, weil Emulator und Simulator kein NFC haben: **Alles, was NFC berührt, ist bisher nicht auf echter Hardware geprüft und gilt erst als geprüft, wenn diese Liste durchlaufen ist.** Die Simulator-Karte des SDK umgeht das Lesen der Karte und taugt dafür nicht.
+English version: [device-test.md](device-test.md)
+
+Diese Liste führen Sie auf echten Geräten mit der Beispiel-App aus `example/` durch. Sie ist nötig, weil Emulator und Simulator kein NFC haben: **Alles, was NFC berührt, gilt erst als geprüft, wenn diese Liste durchlaufen ist.** Für iOS stehen die Ergebnisse unten; für Android steht der Test auf einem echten Gerät noch aus. Die Simulator-Karte des SDK umgeht das Lesen der Karte und taugt dafür nicht.
 
 ## Voraussetzungen
 
@@ -8,7 +10,7 @@ Diese Liste führen Sie auf echten Geräten mit der Beispiel-App aus `example/` 
 - Ein Android-Gerät mit Extended-Length-NFC, Android 9 (API 28) oder neuer.
 - Ein Personalausweis oder eine Testkarte mit bekannter PIN, CAN und PUK. Am voreingestellten Governikus-Testdienst gelingt die Authentisierung nur mit einer Testkarte: Ein echter Personalausweis wird gelesen und die PIN angenommen, danach endet der Ablauf mit `AuthenticationCompleted (isSuccess: false, reason: Process_Certificates_From_Eac2_Cvc_Chain_Missing)`, weil der Testdienst Test-Zertifikate verwendet (so beobachtet am 25.11.2026). Alle Zeilen bis zur PIN-Eingabe lassen sich trotzdem mit einem echten Ausweis prüfen. Für den Test „PIN-Änderung mit Transport-PIN" brauchen Sie eine Karte mit fünfstelliger Transport-PIN.
 - Netzzugriff auf den Governikus-Testdienst.
-- Die Beispiel-App läuft auf dem Gerät; siehe `example/README.md`.
+- Die Beispiel-App läuft auf dem Gerät; siehe `example/README.de.md`.
 
 **Achtung:** Die Zeilen „falsche PIN", „CAN-Fall" und „PUK-Fall" zählen die Fehlversuche der Karte herunter. Nach zwei falschen PINs verlangt die Karte die CAN, nach einer weiteren falschen PIN die PUK. Nutzen Sie dafür bevorzugt eine Testkarte. Eine richtige PIN setzt den Zähler wieder auf 3 (auf einem iPhone mit echtem Ausweis bestätigt). Ein Tippfehler bei der richtigen PIN kostet aber einen weiteren Versuch.
 
@@ -31,7 +33,7 @@ Eintrag je Plattform:
 | --- | --- | --- |
 | Gerätemodell | | iPhone 16 Pro |
 | Betriebssystem-Version | | iOS 27.2.1 |
-| Datum | | 25.11.2026 |
+| Datum | | 25. und 26.11.2026 |
 | Prüferin oder Prüfer | | Dr. Simon Bogutzky |
 
 ## Android
@@ -80,4 +82,4 @@ Im Abschnitt „PIN, CAN, PUK" der Beispiel-App steht der Schalter „NFC-Dialog
 | Anmeldung im Browser gegen einen Produktivdienst (nur mit echtem Ausweis und eigenem Konto): im Abschnitt „Anmeldung im Browser“ die vollständige Login-Adresse des Dienstes mit allen Parametern eintragen, „Im Browser anmelden“, auf der Seite die Anmeldung mit dem Online-Ausweis wählen, dann „Akzeptieren“, Ausweis anhalten, PIN senden. | `eID-Client-Link aus dem Browser übernommen.`, am Ende `AuthenticationCompleted (isSuccess: true, …)` und `Rückkehr-Adresse im Browser geöffnet.`; die Web-Ansicht zeigt den Abschluss des Logins. | iPhone 16 Pro, iOS 27.2.1, 26.11.2026: Bestätigt mit einem echten Personalausweis und einem Login über Keycloak mit angebundenem BundID-Konto. Protokoll: `InsertCardRequested`, Karte gelesen (Fortschritt 20 bis 80), `AuthenticationCompleted (isSuccess: true, major: …#ok, URL: vorhanden)`, `Rückkehr-Adresse im Browser geöffnet.` Nach „Weiter“ auf der BundID-Seite meldet die Beispiel-App `Weiterleitung an eine App empfangen (Schema: …, Parameter: code, iss, session_state, state)`: Der Login ist bis zum Autorisierungscode für die eigentliche App durchgelaufen. Vor dieser Meldung blieb die Seite an derselben Stelle mit ausgegrauter Schaltfläche stehen, weil eine Web-Ansicht einer Weiterleitung auf ein App-Schema nicht folgen kann. Mit eingeschaltetem „Entwicklermodus“ brach das SDK denselben Ablauf sofort ab, und die App sprang in die Web-Ansicht zurück; seitdem startet die Anmeldung im Browser immer ohne Entwicklermodus und bleibt nach einem Fehlschlag beim Protokoll. |
 | SDK stoppen und neu starten: „SDK starten“, „Authentisierung starten“ bis `AccessRightsRequested`, „SDK stoppen“, „Info“, „SDK starten“, „Info“, erneut „Authentisierung starten“ bis `AccessRightsRequested`, „Abbrechen“. Geht ohne Ausweis am voreingestellten Testdienst. | Nach dem Stoppen `Fehler bei GET_INFO: … not_running`; nach dem Neustart `InfoReceived (Version: 2.6.3, …)`; der zweite Ablauf startet und endet mit `AuthenticationCompleted (isSuccess: false, …#cancellationByUser, …)`. | iPhone 16 Pro, iOS 27.2.1, 26.11.2026: Bestätigt. Das Stoppen mitten im Ablauf liefert kein `AuthenticationCompleted` mehr; eine App darf nach `stop()` nicht auf ein Abschluss-Ereignis warten. |
 
-Die Zeilen „NFC ausgeschaltet“ und „Bildschirm drehen“ gibt es nur für Android: Ein iPhone hat keinen NFC-Schalter in den Systemeinstellungen, und das Drehen gehört nach der Vorgabe nur zum Android-Test.
+Die Zeilen „NFC ausgeschaltet“ und „Bildschirm drehen“ gibt es nur für Android: Ein iPhone hat keinen NFC-Schalter in den Systemeinstellungen, und das Drehen des Bildschirms wird nur unter Android geprüft.
