@@ -1,7 +1,9 @@
+import CoreNFC
 import Flutter
 import UIKit
 
-/// Moves JSON strings between Dart and the AusweisApp SDK.
+/// Moves JSON strings between Dart and the AusweisApp SDK. Also answers for
+/// the NFC state of the device, which works while the SDK is stopped.
 ///
 /// Flutter calls every handler here on the main thread and `SdkBridge` reports
 /// on the main thread, so the event sink and method results are only ever
@@ -53,6 +55,12 @@ public class FlutterAusweisappPlugin: NSObject, FlutterPlugin, FlutterStreamHand
       }
     case "isRunning":
       result(bridge.isRunning)
+    case "nfcStatus":
+      // NFC cannot be switched off on iOS, so there is no "disabled".
+      result(NFCTagReaderSession.readingAvailable ? "available" : "unsupported")
+    case "openNfcSettings":
+      // iOS has no NFC setting; false tells Dart that nothing was opened.
+      result(false)
     default:
       result(FlutterMethodNotImplemented)
     }

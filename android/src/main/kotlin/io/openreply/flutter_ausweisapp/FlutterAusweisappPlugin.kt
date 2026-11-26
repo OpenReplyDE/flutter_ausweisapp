@@ -1,5 +1,7 @@
 package io.openreply.flutter_ausweisapp
 
+import android.app.Activity
+import android.content.Context
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -9,7 +11,8 @@ import io.flutter.plugin.common.MethodChannel
 
 /**
  * Moves JSON strings between Dart and the AusweisApp SDK and switches NFC
- * reader mode for the foreground Activity.
+ * reader mode for the foreground Activity. Also answers for the NFC state of
+ * the device and opens its NFC settings; both work while the SDK is stopped.
  *
  * Flutter calls every handler here on the main thread; [SdkConnection] and
  * [NfcReaderMode] report on the main thread, so the event sink and method
@@ -23,10 +26,13 @@ class FlutterAusweisappPlugin :
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
     private lateinit var sdk: SdkConnection
+    private lateinit var applicationContext: Context
+    private var activity: Activity? = null
     private var eventSink: EventChannel.EventSink? = null
     private val readerMode = NfcReaderMode(onTag = { tag -> sdk.updateNfcTag(tag) })
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        applicationContext = binding.applicationContext
         sdk = SdkConnection(
             binding.applicationContext,
             onMessage = { json -> eventSink?.success(mapOf("type" to "message", "json" to json)) },
@@ -79,6 +85,9 @@ class FlutterAusweisappPlugin :
                 }
             }
             "isRunning" -> result.success(sdk.isRunning)
+            "nfcStatus" -> result.success(NfcDevice.status(applicationContext))
+            "openNfcSettings" ->
+                result.success(NfcDevice.openSettings(applicationContext, activity))
             else -> result.notImplemented()
         }
     }
@@ -93,18 +102,22 @@ class FlutterAusweisappPlugin :
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity
         readerMode.attach(binding.activity)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
         readerMode.detach()
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
         readerMode.attach(binding.activity)
     }
 
     override fun onDetachedFromActivity() {
+        activity = null
         readerMode.detach()
     }
 
