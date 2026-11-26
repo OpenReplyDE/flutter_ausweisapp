@@ -75,7 +75,9 @@ class EidLoginFlow {
     required this.onCardNeeded,
     required this.onInput,
     required this.onRedirect,
+    required this.onNfcUnavailable,
     required this.onFailed,
+    this.nfc = const MethodChannelAusweisAppNfc(),
   });
 
   /// Die vollständige Login-Adresse des Dienstes mit allen Parametern.
@@ -96,9 +98,16 @@ class EidLoginFlow {
   /// Der Login ist fertig: Die Adresse trägt den Code für den Token-Tausch.
   final void Function(Uri redirect) onRedirect;
 
-  /// Die Authentisierung ist gescheitert oder wurde abgebrochen; [reason]
-  /// ist der Code des SDK.
-  final void Function(String? reason) onFailed;
+  /// Das Gerät kann den Ausweis gerade nicht lesen: [status] ist
+  /// `NfcStatus.unsupported` oder, unter Android, `NfcStatus.disabled`.
+  final void Function(NfcStatus status) onNfcUnavailable;
+
+  /// Die Authentisierung ist gescheitert oder wurde abgebrochen. [kind]
+  /// bestimmt den Text; [code] ist der rohe Code für den Support.
+  final void Function(FailureKind kind, String? code) onFailed;
+
+  /// Der NFC-Zustand des Geräts; Tests übergeben ein `FakeAusweisAppNfc`.
+  final AusweisAppNfc nfc;
 
   final eid = AusweisApp();
   late final WebViewController web = WebViewController()
@@ -122,7 +131,7 @@ class EidLoginFlow {
     // Die Seite will den Ausweis-Client starten: Das SDK übernimmt.
     final tcTokenUrl = tcTokenUrlFromEidClientLink(url);
     if (tcTokenUrl != null) {
-      unawaited(eid.startAuthentication(tcTokenUrl: tcTokenUrl));
+      unawaited(_startScan(tcTokenUrl));
       return NavigationDecision.prevent;
     }
 
@@ -132,6 +141,17 @@ class EidLoginFlow {
       return NavigationDecision.prevent;
     }
     return NavigationDecision.navigate;
+  }
+
+  /// Startet die Authentisierung, wenn das Gerät den Ausweis gerade lesen
+  /// kann.
+  Future<void> _startScan(Uri tcTokenUrl) async {
+    final status = await nfc.status();
+    if (status != NfcStatus.available) {
+      onNfcUnavailable(status);
+      return;
+    }
+    await eid.startAuthentication(tcTokenUrl: tcTokenUrl);
   }
 
   void _onEvent(AusweisAppEvent event) {
@@ -152,9 +172,9 @@ class EidLoginFlow {
       case AuthenticationCompleted(:final result):
         // Die Adresse meldet dem Dienst das Ergebnis, auch einen Fehlschlag.
         if (result.url case final url?) unawaited(web.loadRequest(url));
-        if (!result.isSuccess) onFailed(result.reason);
+        if (result.failureKind case final kind?) onFailed(kind, result.reason);
       case AuthenticationStartFailed(:final error):
-        onFailed(error);
+        onFailed(FailureKind.other, error);
       default:
         break;
     }
@@ -170,6 +190,8 @@ class EidLoginFlow {
 
 Zeigen Sie die Web-Ansicht mit `WebViewWidget(controller: flow.web)`, solange die Nutzerin oder der Nutzer auf der Login-Seite ist, und die eigenen Screens der App, solange das SDK arbeitet. Setzen Sie `developerMode` für einen Produktivdienst nicht; das SDK lehnt ihn dort ab.
 
+Die Klasse fragt den NFC-Zustand in dem Moment ab, in dem die Seite den Ausweis-Schritt startet. Hat das Gerät kein NFC oder ist NFC ausgeschaltet, startet sie die Authentisierung nicht, und die Web-Ansicht bleibt auf der Login-Seite. Zeigen Sie bei `NfcStatus.disabled` einen Knopf, der `flow.nfc.openSettings()` aufruft; ist NFC eingeschaltet, wählt die Nutzerin oder der Nutzer den Ausweis auf der Seite erneut. `flow.start()` reicht die `AusweisAppStartException` von `eid.start()` durch; ihr `failureKind` ist `timeout` oder `other`.
+
 ## 4. Den Login abschließen
 
 `onRedirect` erhält die Redirect-Adresse mit den Parametern `code` und `state`. Ab hier ist nichts mehr ausweisspezifisch: Prüfen Sie `state` gegen den Wert, den die App gesendet hat, und tauschen Sie `code` am Token-Endpunkt zusammen mit dem PKCE-Verifier ein. `state` und die PKCE-Werte erzeugt die App selbst, wenn sie `loginUrl` zusammenbaut, weil in diesem Ablauf keine Login-Bibliothek das übernimmt.
@@ -178,14 +200,19 @@ Zeigen Sie die Web-Ansicht mit `WebViewWidget(controller: flow.web)`, solange di
 
 | Ereignis | Was die App zeigt | Danach |
 | --- | --- | --- |
+| vor dem Scan liefert `nfc.status()` den Wert `NfcStatus.unsupported` | den Hinweis, dass dieses Gerät den Ausweis nicht lesen kann (kein NFC) | nichts; der Ausweis-Schritt ist auf diesem Gerät nicht möglich |
+| vor dem Scan liefert `nfc.status()` den Wert `NfcStatus.disabled` (nur Android) | den Hinweis, dass NFC ausgeschaltet ist, mit einem Knopf zu den Einstellungen | `nfc.openSettings()`; `nfc.status()` erneut abfragen, wenn die App in den Vordergrund zurückkehrt |
 | `AccessRightsRequested` | die Daten, die der Dienst anfragt | `eid.accept()` oder `eid.cancel()` |
 | `InsertCardRequested` | den Hinweis, den Ausweis an das Gerät zu halten | nichts; das SDK macht von selbst weiter |
 | `PinRequested` | die PIN-Eingabe, mit `retryCounter`, wenn er unter 3 liegt | `eid.setPin(pin)` |
 | `CanRequested` | die CAN-Eingabe (sechs Ziffern auf der Vorderseite des Ausweises) | `eid.setCan(can)` |
 | `PukRequested` | die PUK-Eingabe (aus dem PIN-Brief) | `eid.setPuk(puk)` |
-| `AuthenticationCompleted` mit `isSuccess == false` | eine Fehler- oder Abbruchmeldung | den Login neu beginnen |
+| `AuthenticationCompleted` mit `isSuccess == false` | einen Text nach `result.failureKind`: `network` für ein Verbindungsproblem, `timeout` für eine Zeitüberschreitung, `cardConnection` für einen bewegten oder entfernten Ausweis, `userCancelled` für einen Abbruch (meist ohne Fehlertext), `other` einen allgemeinen Text mit `result.reason` als Code für den Support | den Login neu beginnen |
+| `AusweisAppStartException` aus `eid.start()` | nach ihrem `failureKind`: `timeout` den Text zur Zeitüberschreitung, `other` den allgemeinen Text mit `code` | `eid.start()` erneut aufrufen |
 
 Nach einer falschen PIN fragt das SDK erneut, mit niedrigerem `retryCounter`; bei 1 fragt es zuerst nach der CAN, bei 0 nach der PUK. Eine richtige PIN setzt den Zähler wieder auf 3.
+
+Die Klassen und die Codes dahinter stehen im Abschnitt „Fehlerklassen“ der [README](../README.de.md). Das SDK hat keinen Code für ein Gerät, das offline ist; dieser Fall kommt zusammen mit anderen Verbindungsproblemen als `network` an. NFC-Zustände sind keine Fehler des SDK und kommen nie als Ereignis: Die App fragt sie selbst ab.
 
 ## Verhalten unter iOS, das Sie einplanen müssen
 
@@ -201,6 +228,7 @@ Unter Android gibt es keinen Systemdialog; die App zeigt ihren eigenen Hinweis, 
 ## Testen
 
 - **Screens ohne Gerät:** `AusweisApp(transport: FakeAusweisAppTransport())` aus `package:flutter_ausweisapp/testing.dart` lässt Widget-Tests beliebige SDK-Nachrichten an die Screens der App schicken.
+- **NFC-Zustände ohne Gerät:** `FakeAusweisAppNfc(nfcStatus: NfcStatus.disabled)` aus derselben Datei ersetzt den NFC-Zustand des Geräts, sodass sich die Screens für „Kein NFC“ und „NFC ausgeschaltet“ auf jedem Rechner testen lassen.
 - **Ohne Ausweis:** Die Simulator-Karte des SDK funktioniert am Governikus-Testdienst mit `developerMode: true`; siehe „Simulator-Karte“ in der README.
 - **Echte Ausweise** funktionieren nur gegen einen Produktivdienst und ohne Entwicklermodus. Testausweise der Test-PKI funktionieren gegen Testdienste.
 - Die Beispiel-App in `example/` enthält den hier beschriebenen Ablauf als Testwerkzeug („Anmeldung im Browser“).

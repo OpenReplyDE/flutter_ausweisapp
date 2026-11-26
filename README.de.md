@@ -4,7 +4,7 @@ English version: [README.md](README.md)
 
 `flutter_ausweisapp` bindet das AusweisApp-SDK von Governikus (Version 2.6.3) in Flutter-Apps für Android und iOS ein. Damit kann sich eine Nutzerin oder ein Nutzer mit dem Online-Ausweis authentisieren, ohne die App zu verlassen: Das SDK liest die Karte per NFC, die App zeigt alle Dialoge (PIN, CAN, PUK, Zugriffsrechte) auf ihren eigenen Screens. Das Plugin bringt keine Oberfläche mit. Es reicht die JSON-Kommandos und -Nachrichten des SDK an Dart durch und stellt sie als typisierte Methoden und als Ereignis-Stream bereit.
 
-**Stand der Gerätetests.** Unter iOS ist das Plugin auf einem iPhone 16 Pro mit iOS 27.2.1 und einem echten Personalausweis geprüft, einschließlich einer vollständigen Anmeldung gegen einen Produktivdienst; die Ergebnisse stehen in `docs/geraetetest.md`. **Unter Android ist echtes NFC noch ungetestet:** Emulator und Simulator haben kein NFC, und die Simulator-Karte des SDK umgeht das Lesen der Karte vollständig. Alles, was unter Android NFC berührt, gilt erst als geprüft, wenn die Prüfliste dort auf einem echten Gerät durchlaufen wurde.
+**Stand der Gerätetests.** Unter iOS ist das Plugin auf einem iPhone 16 Pro mit iOS 27.2.1 und einem echten Personalausweis geprüft, einschließlich einer vollständigen Anmeldung gegen einen Produktivdienst; die Ergebnisse stehen in `docs/geraetetest.md`. **Unter Android ist echtes NFC noch ungetestet:** Emulator und Simulator haben kein NFC, und die Simulator-Karte des SDK umgeht das Lesen der Karte vollständig. Alles, was unter Android NFC berührt, gilt erst als geprüft, wenn die Prüfliste dort auf einem echten Gerät durchlaufen wurde. Die mit Version 0.2.0 ergänzten Funktionen (NFC-Status und NFC-Einstellungen) sind auf beiden Plattformen noch nicht auf einem echten Gerät gelaufen.
 
 ## Inhalt
 
@@ -91,9 +91,70 @@ Unter iOS zeigt das System einen eigenen NFC-Dialog, solange das SDK die Karte l
 
 Auf einem iPhone 16 Pro mit iOS 27.2.1 ist das bestätigt: Der Dialog bleibt nach `PinRequested` offen, und die App lässt sich darunter nicht bedienen. Schließt die Nutzerin oder der Nutzer den Dialog über dessen eigene Schaltfläche, bricht das SDK den Ablauf ab und meldet `AuthenticationCompleted` mit `reason: User_Cancelled`.
 
+### NFC-Status und NFC-Einstellungen
+
+`AusweisAppNfc` sagt, ob das Gerät den Ausweis gerade lesen kann. Das funktioniert ohne das SDK: Es muss kein `AusweisApp` geben, und `start()` muss nicht aufgerufen sein. Fragen Sie ab, bevor Sie den Scan starten:
+
+```dart
+const AusweisAppNfc nfc = MethodChannelAusweisAppNfc();
+
+switch (await nfc.status()) {
+  case NfcStatus.unsupported:
+    showNoNfc(); // das Gerät kann den Ausweis nicht lesen
+  case NfcStatus.disabled:
+    showNfcSwitchedOff(); // mit einem Knopf, der nfc.openSettings() aufruft
+  case NfcStatus.available:
+    startScan();
+}
+```
+
+`NfcStatus.disabled` kommt nur unter Android vor. Dort öffnet `openSettings()` die NFC-Einstellungen des Systems und gibt `true` zurück. iOS hat keine solche Einstellung: Der Aufruf tut dort nichts und gibt `false` zurück, ohne Fehler. Siehe [Plattformunterschiede](#plattformunterschiede).
+
+Der Status wird bei jedem Aufruf neu gelesen, Benachrichtigungen über Änderungen gibt es nicht. Fragen Sie erneut ab, wenn die App in den Vordergrund zurückkehrt (`AppLifecycleState.resumed`), zum Beispiel nach der Rückkehr aus den Einstellungen.
+
+### Fehlerklassen
+
+Das SDK meldet als Fehlercode, warum ein Ablauf gescheitert ist, zum Beispiel `Card_Removed` in `AuthResult.reason`. Seine Dokumentation führt 93 davon auf. `failureKind` ordnet sie wenigen Klassen zu, damit eine App für die häufigen Fälle einen eigenen Text zeigen kann und für alle übrigen einen allgemeinen Text mit dem rohen Code:
+
+| `FailureKind` | Bedeutung | Codes |
+| --- | --- | --- |
+| `network` | ein Problem mit der Netzverbindung | die sieben Codes, für die die SDK-Dokumentation "Fix connection problems" empfiehlt, zum Beispiel `Get_TcToken_Network_Error` |
+| `timeout` | etwas hat zu lange gedauert | `Check_Refresh_Address_Service_Timeout` und `Change_Pin_Input_Timeout`; außerdem der plugin-eigene Code `timeout` von `start()` und `stop()` |
+| `userCancelled` | die Nutzerin oder der Nutzer hat abgebrochen, oder die App mit `cancel()` | `User_Cancelled` und die fünf weiteren Codes, die auf `User_Cancelled` enden |
+| `cardConnection` | der Ausweis wurde entfernt, oder die Verbindung zu ihm ist gescheitert | `Card_Removed` und die acht Codes, für die die SDK-Dokumentation "Check ID card position" empfiehlt, zum Beispiel `Transmit_Card_Command_Failed` |
+| `other` | alles Übrige, auch ein fehlender oder unbekannter Code | – |
+
+```dart
+case AuthenticationCompleted(:final result):
+  switch (result.failureKind) {
+    case null:
+      showSuccess();
+    case FailureKind.network:
+      showNoConnection();
+    case FailureKind.timeout:
+      showTimeout();
+    case FailureKind.userCancelled:
+      closeScan();
+    case FailureKind.cardConnection:
+      showCardLost();
+    case FailureKind.other:
+      showGeneralError(code: result.reason); // der Code ist für den Support
+  }
+```
+
+`failureKind` gibt es an `AuthResult` und an `ChangePinCompleted` (`null` bei Erfolg) und an jeder `AusweisAppException`, also auch an der `AusweisAppStartException`, die `start()` wirft. `FailureKind.fromReason(code)` ordnet einen rohen Code zu. Die rohen Werte (`reason`, `major`, `minor`, `code`) bleiben, wie sie sind. `AuthenticationStartFailed` trägt nur einen Freitext und hat keine Klasse.
+
+Was die Klassen nicht sagen:
+
+- Die Zuordnung richtet sich allein nach `reason`. Die SDK-Dokumentation führt die Werte von `minor` nicht auf, und auf einem iPhone meldete `minor` auch dann `cancellationByUser`, als der Ausweis weggezogen wurde.
+- Das SDK hat keinen Code für "das Gerät ist offline". Dieser Fall kommt als einer der Netzwerkfehler an; `network` heißt deshalb "Verbindungsproblem", nicht streng "keine Internetverbindung".
+- Quelle ist die Liste der Fehlercodes in der SDK-Dokumentation, `AusweisApp-community/docs/failurecodes/failurecodes.rst`. Die vollständige Tabelle steht in `lib/src/failure.dart`, und der Test `test/failure_test.dart` vergleicht sie mit dieser Datei.
+
 ### Die App ohne Gerät testen
 
 `package:flutter_ausweisapp/testing.dart` enthält `FakeAusweisAppTransport`. Mit `AusweisApp(transport: fake)` lassen sich die eigenen Screens in Widget-Tests prüfen, ohne SDK und ohne Gerät.
+
+Dieselbe Datei enthält `FakeAusweisAppNfc`. Lassen Sie Ihren Screen ein `AusweisAppNfc` entgegennehmen, und übergeben Sie im Test `FakeAusweisAppNfc(nfcStatus: NfcStatus.disabled)` statt `MethodChannelAusweisAppNfc()`; `nfcStatus` lässt sich während des Tests ändern, und `openSettingsCalls` zählt die Aufrufe von `openSettings()`.
 
 ## Einrichtung Android
 
@@ -112,6 +173,7 @@ Auf einem iPhone 16 Pro mit iOS 27.2.1 ist das bestätigt: Der Dialog bleibt nac
 
    Ohne eigene `Application`-Klasse ist nichts zu tun.
 3. **Geräte.** Das SDK unterstützt nur Android-Geräte mit Extended-Length-NFC. Auf anderen Geräten lässt sich der Ausweis nicht lesen.
+4. **NFC bleibt optional.** Das Android-Paket des SDK trägt `<uses-feature android:name="android.hardware.nfc" android:required="false" />` ein, und so kommt es im zusammengeführten Manifest der App an (geprüft an der gebauten Beispiel-App mit SDK 2.6.3: `aapt2 dump badging` meldet `uses-feature-not-required: name='android.hardware.nfc'`). Die App bleibt damit auf Geräten ohne NFC installierbar, und es gibt nichts zu überschreiben. Tragen Sie die Fähigkeit nicht mit `android:required="true"` in Ihr eigenes Manifest ein; fragen Sie stattdessen zur Laufzeit `AusweisAppNfc.status()` ab.
 
 Das Plugin bindet den SDK-Dienst selbst. Die Berechtigung `android.permission.NFC` und der Dienst kommen über das Android-Paket des SDK in die App. Den NFC-Lesemodus schaltet das Plugin selbst ein und aus, solange das SDK läuft und die Activity im Vordergrund ist; Ihre App braucht dafür keinen eigenen nativen Code.
 
@@ -153,6 +215,8 @@ Bekannte Einschränkung beim Bauen: Mit Flutter 3.41.7 und Xcode 27.2 schlägt `
 | `interrupt()` (schließt den NFC-Dialog) | sendet nichts | wirkt |
 | Ereignis `Disconnected` (Verbindung zum SDK verloren) | wird gemeldet | wird nicht gemeldet |
 | NFC-Dialog | – | zeigt iOS selbst; seine Texte kommen über `userInfoMessages` |
+| `AusweisAppNfc.status()` | `unsupported` (kein NFC-Adapter), `disabled` (NFC ausgeschaltet) oder `available` | `unsupported` oder `available`, je nachdem, ob das Gerät Tags lesen kann; nie `disabled`, weil sich NFC nicht ausschalten lässt |
+| `AusweisAppNfc.openSettings()` | öffnet die NFC-Einstellungen des Systems und gibt `true` zurück; `false`, wenn das Gerät keinen solchen Screen anbietet | tut nichts und gibt `false` zurück, ohne Fehler; iOS hat keine NFC-Einstellung |
 | Ausweis wird während des Lesens weggezogen | auf einem Gerät noch ungeprüft | kein `Paused`; der Ablauf endet mit `AuthenticationCompleted` ohne Erfolg, und die Anmeldung muss neu beginnen (auf einem iPhone beobachtet) |
 
 Besonderheiten unter Android:
@@ -194,7 +258,7 @@ Tests in diesem Repository:
 
 - `flutter test` im Wurzelverzeichnis führt die Unit-Tests aus, ohne Gerät.
 - `flutter test` im Verzeichnis `example/` führt die Widget-Tests der Beispiel-App aus.
-- `flutter test integration_test -d <Gerät>` im Verzeichnis `example/` führt die Integrationstests auf einem Emulator, Simulator oder Gerät aus. Der Test mit der Simulator-Karte braucht Netzzugriff auf den Governikus-Testdienst.
+- `flutter test integration_test -d <Gerät>` im Verzeichnis `example/` führt die Integrationstests auf einem Emulator, Simulator oder Gerät aus. Der Test mit der Simulator-Karte braucht Netzzugriff auf den Governikus-Testdienst. Der Test des NFC-Status erwartet dort keinen bestimmten Wert; ein Emulator oder Simulator hat kein NFC und antwortet mit `unsupported`.
 
 Die Beispiel-App in `example/` ist eine einfache Testoberfläche, die alle Abläufe anstößt. Wie Sie sie auf einem Gerät starten, steht in `example/README.de.md`; die Prüfliste für echte Geräte steht in `docs/geraetetest.md`.
 
@@ -203,6 +267,11 @@ Die Beispiel-App in `example/` ist eine einfache Testoberfläche, die alle Ablä
 ## SDK-Update
 
 Die SDK-Version steht an zwei Stellen: in `android/build.gradle.kts` (`com.governikus:ausweisapp:2.6.3`) und in `ios/flutter_ausweisapp/Package.swift` (`exact: "2.6.3"`). Lesen Sie vor dem Anheben das SDK-Changelog unter `AusweisApp-community/docs/sdk/changelog.rst`, weil das Plugin das Protokoll selbst umsetzt und Änderungen dort nachzieht. Das Plugin stellt beim Start das API-Level 3 ein, damit ein neueres SDK das Verhalten nicht stillschweigend ändert.
+
+Zwei weitere Prüfungen gehören zu einem Update:
+
+- Ersetzen Sie `AusweisApp-community/docs/failurecodes/failurecodes.rst` durch die Datei der neuen SDK-Version, und führen Sie `flutter test` aus. `test/failure_test.dart` schlägt fehl, wenn es einen Code aus `lib/src/failure.dart` nicht mehr gibt oder wenn ein neuer Code zu einer der Klassen gehört.
+- Bauen Sie die Beispiel-App, und prüfen Sie, dass NFC weiterhin eine optionale Fähigkeit ist: `aapt2 dump badging example/build/app/outputs/flutter-apk/app-debug.apk` muss `uses-feature-not-required: name='android.hardware.nfc'` melden. Macht eine neue SDK-Version NFC zur Pflicht-Fähigkeit, muss der Eintrag mit `<uses-feature android:name="android.hardware.nfc" android:required="false" tools:replace="android:required" />` überschrieben werden, und diese README muss sagen, wo.
 
 ## Abgrenzung: Login-Ablauf der App
 
