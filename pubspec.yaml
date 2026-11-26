@@ -1,6 +1,6 @@
 name: flutter_ausweisapp
 description: "Flutter plugin that bridges the Governikus AusweisApp SDK (German eID, Online-Ausweis) to Dart on Android and iOS."
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 
 environment:

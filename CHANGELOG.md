@@ -2,6 +2,18 @@
 
 Deutsche Fassung: [CHANGELOG.de.md](CHANGELOG.de.md)
 
+## 0.2.0
+
+Additions for apps that show their own screens. Nothing that existed changes.
+
+- `AusweisAppNfc` (implemented by `MethodChannelAusweisAppNfc`) reports the NFC state of the device as `NfcStatus` (`unsupported`, `disabled`, `available`), without a running SDK. `openSettings()` opens the system's NFC settings on Android; on iOS, which has none, it does nothing and returns `false`.
+- `FailureKind` sorts failure codes into `network`, `timeout`, `userCancelled`, `cardConnection` and `other`. It is available as `AuthResult.failureKind`, `ChangePinCompleted.failureKind`, `AusweisAppException.failureKind` and `FailureKind.fromReason`; the raw codes stay unchanged. The assignment follows the list of failure codes in the SDK documentation, which is now part of the repository (`AusweisApp-community/docs/failurecodes/failurecodes.rst`).
+- `FakeAusweisAppNfc` in `package:flutter_ausweisapp/testing.dart` replaces the NFC state in tests.
+- The example app shows the NFC state, a button to the NFC settings and the failure kind in its log.
+- Documented: the SDK's Android package declares NFC as an optional feature, so an app with the plugin stays installable on devices without NFC.
+
+The NFC functions have run on an iOS simulator only. On real devices they are untested on both platforms; see `docs/device-test.md`.
+
 ## 0.1.0
 
 First version. The plugin integrates the AusweisApp SDK 2.6.3 into Flutter for Android and iOS and can:
