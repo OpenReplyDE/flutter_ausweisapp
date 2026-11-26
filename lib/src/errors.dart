@@ -2,6 +2,8 @@
 /// payloads (PIN, CAN, PUK, headers).
 library;
 
+import 'failure.dart';
+
 /// Base class of all plugin exceptions.
 sealed class AusweisAppException implements Exception {
   const AusweisAppException();
@@ -11,6 +13,12 @@ sealed class AusweisAppException implements Exception {
 
   /// Human-readable description without any command payload.
   String get message;
+
+  /// What kind of failure [code] stands for: [FailureKind.timeout] for the
+  /// code `timeout` (`start()` or `stop()` did not finish in time), else
+  /// [FailureKind.other]. These codes are the plugin's own, not SDK codes.
+  FailureKind get failureKind =>
+      code == 'timeout' ? FailureKind.timeout : FailureKind.other;
 
   @override
   String toString() => '$runtimeType($code): $message';

@@ -22,7 +22,7 @@ Wer eine App mit diesem Plugin ausliefert, verbreitet damit eine Kopie des SDK. 
 2. den Lizenztext mitliefern,
 3. auf den Quellcode des SDK verweisen: `https://github.com/Governikus/AusweisApp`.
 
-Die Lizenzbestimmungen, die Governikus dem SDK beilegt, liegen in diesem Repository unter `AusweisApp-community/LICENSE.txt`. Im selben Ordner liegt unter `AusweisApp-community/docs/sdk/` die Protokoll-Dokumentation des SDK, nach der das Plugin geschrieben ist; sie stammt aus dem Governikus-Repository und steht ebenfalls unter der EUPL 1.2.
+Die Lizenzbestimmungen, die Governikus dem SDK beilegt, liegen in diesem Repository unter `AusweisApp-community/LICENSE.txt`. Im selben Ordner liegen unter `AusweisApp-community/docs/sdk/` die Protokoll-Dokumentation des SDK, nach der das Plugin geschrieben ist, und unter `AusweisApp-community/docs/failurecodes/failurecodes.rst` die Liste der Fehlercodes, die diese Dokumentation einbindet; beide stammen aus dem Governikus-Repository und stehen ebenfalls unter der EUPL 1.2.
 
 ## Zusatzvereinbarungen zur AusweisApp
 

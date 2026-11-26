@@ -12,6 +12,11 @@
 !/AusweisApp-community/docs/
 /AusweisApp-community/docs/*
 !/AusweisApp-community/docs/sdk/
+# docs/sdk/failurecodes.rst bindet nur diese Datei ein; sie ist die Quelle der
+# Fehlerklassen (lib/src/failure.dart) und wird von test/failure_test.dart gelesen.
+!/AusweisApp-community/docs/failurecodes/
+/AusweisApp-community/docs/failurecodes/*
+!/AusweisApp-community/docs/failurecodes/failurecodes.rst
 
 # Dart / Flutter
 .dart_tool/

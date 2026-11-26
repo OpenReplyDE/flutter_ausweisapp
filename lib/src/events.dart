@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/foundation.dart' show immutable;
 
+import 'failure.dart';
 import 'protocol/message.dart';
 import 'protocol/models.dart';
 
@@ -172,6 +173,11 @@ final class ChangePinCompleted extends AusweisAppEvent {
 
   /// Failure code if [success] is false.
   final String? reason;
+
+  /// What kind of failure [reason] stands for, or `null` if the PIN was
+  /// changed. A failure without a known [reason] is [FailureKind.other].
+  FailureKind? get failureKind =>
+      success ? null : FailureKind.fromReason(reason);
 }
 
 /// Answer to `getCertificate()`.

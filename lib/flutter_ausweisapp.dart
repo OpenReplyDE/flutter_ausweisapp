@@ -6,5 +6,6 @@ export 'src/protocol/message.dart';
 export 'src/protocol/models.dart';
 export 'src/eid_client_link.dart';
 export 'src/errors.dart';
+export 'src/failure.dart' show FailureKind;
 export 'src/transport/method_channel_transport.dart';
 export 'src/transport/transport.dart';

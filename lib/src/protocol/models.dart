@@ -1,6 +1,8 @@
 /// Data types carried by SDK messages.
 library;
 
+import '../failure.dart';
+
 /// Information about an inserted card.
 ///
 /// An empty `card` object in the protocol means an unknown card; all fields
@@ -111,6 +113,15 @@ class AuthResult {
 
   /// Whether the authentication succeeded (`major` ends with `#ok`).
   bool get isSuccess => major != null && major!.endsWith('#ok');
+
+  /// What kind of failure [reason] stands for, or `null` if the
+  /// authentication succeeded.
+  ///
+  /// Goes by [reason] alone: the SDK documentation lists the failure codes
+  /// but not the values of [minor]. A failed result without a known [reason]
+  /// is [FailureKind.other].
+  FailureKind? get failureKind =>
+      isSuccess ? null : FailureKind.fromReason(reason);
 }
 
 /// The certificate of the service provider.

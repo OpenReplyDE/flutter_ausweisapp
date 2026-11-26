@@ -22,7 +22,7 @@ Whoever ships an app with this plugin thereby distributes a copy of the SDK. The
 2. include the license text,
 3. refer to the SDK's source code: `https://github.com/Governikus/AusweisApp`.
 
-The license terms that Governikus includes with the SDK are in this repository at `AusweisApp-community/LICENSE.txt`. In the same folder, under `AusweisApp-community/docs/sdk/`, is the SDK's protocol documentation, which the plugin was written against; it comes from the Governikus repository and is also licensed under the EUPL 1.2.
+The license terms that Governikus includes with the SDK are in this repository at `AusweisApp-community/LICENSE.txt`. In the same folder, under `AusweisApp-community/docs/sdk/`, is the SDK's protocol documentation, which the plugin was written against, and at `AusweisApp-community/docs/failurecodes/failurecodes.rst` the list of failure codes that this documentation includes; both come from the Governikus repository and are also licensed under the EUPL 1.2.
 
 ## Additional agreements on the AusweisApp
 
