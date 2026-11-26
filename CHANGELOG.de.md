@@ -2,7 +2,7 @@
 
 English version: [CHANGELOG.md](CHANGELOG.md)
 
-## 0.0.1
+## 0.1.0
 
 Erste Fassung. Das Plugin bindet das AusweisApp-SDK 2.6.3 für Android und iOS in Flutter ein und kann:
 
@@ -15,5 +15,7 @@ Erste Fassung. Das Plugin bindet das AusweisApp-SDK 2.6.3 für Android und iOS i
 - mit `FakeAusweisAppTransport` (`package:flutter_ausweisapp/testing.dart`) ohne Gerät getestet werden.
 
 Das Plugin steht unter der EUPL 1.2.
+
+Der Git-Tag `v0.0.1` bezeichnet denselben Code, bevor die Versionsnummer auf 0.1.0 gesetzt wurde.
 
 Unter iOS ist das Plugin auf einem echten Gerät geprüft, unter Android ist echtes NFC noch ungetestet; siehe `docs/geraetetest.md`.

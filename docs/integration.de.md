@@ -38,11 +38,11 @@ Das Plugin liegt nicht auf pub.dev. Verweisen Sie auf das Git-Repository und leg
 dependencies:
   flutter_ausweisapp:
     git:
-      url: git@github.com:OpenReplyDE/flutter_ausweisapp.git
-      ref: v0.0.1
+      url: https://github.com/OpenReplyDE/flutter_ausweisapp.git
+      ref: v0.1.0
 ```
 
-Build-Rechner brauchen Lesezugriff auf das Repository, solange es privat ist.
+Das Repository ist öffentlich; Build-Rechner brauchen dafür keinen eingerichteten Zugriff. Legen Sie einen Tag fest und keinen Branch, damit sich ein Build nicht ohne Änderung in Ihrer `pubspec.yaml` ändert.
 
 ## 2. Plattformen einrichten
 

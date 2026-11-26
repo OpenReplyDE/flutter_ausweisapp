@@ -38,11 +38,11 @@ The plugin is not on pub.dev. Reference the Git repository and pin a tag:
 dependencies:
   flutter_ausweisapp:
     git:
-      url: git@github.com:OpenReplyDE/flutter_ausweisapp.git
-      ref: v0.0.1
+      url: https://github.com/OpenReplyDE/flutter_ausweisapp.git
+      ref: v0.1.0
 ```
 
-Build machines need read access to the repository as long as it is private.
+The repository is public, so build machines need no access setup. Pin a tag rather than a branch, so that a build does not change without a change in your `pubspec.yaml`.
 
 ## 2. Set up the platforms
 
