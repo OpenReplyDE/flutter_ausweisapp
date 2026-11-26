@@ -41,7 +41,9 @@ Future<(FakeAusweisAppTransport, _FakeWebLogin)> _pump(
   addTearDown(tester.view.reset);
   final transport = FakeAusweisAppTransport();
   final web = _FakeWebLogin();
-  await tester.pumpWidget(MyApp(transport: transport, webLogin: () => web));
+  await tester.pumpWidget(
+    MyApp(transport: transport, nfc: FakeAusweisAppNfc(), webLogin: () => web),
+  );
   return (transport, web);
 }
 

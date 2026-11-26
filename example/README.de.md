@@ -33,6 +33,8 @@ Hinweis zum Bauen am 24.11.2026: Mit Flutter 3.41.7 und Xcode 27.2 schlägt `flu
 2. „Authentisierung starten" antippen, die Ereignisse erscheinen im Protokoll.
 3. PIN, CAN und PUK tragen Sie im Feld „Eingabe" ein und senden sie mit den vier Schaltflächen darunter.
 
+Der Abschnitt „NFC“ zeigt den NFC-Zustand des Geräts (`NFC: verfügbar`, `ausgeschaltet`, `kein NFC`). Er braucht kein laufendes SDK und wird jedes Mal neu gelesen, wenn die App in den Vordergrund kommt. „NFC-Status abfragen“ schreibt den Zustand ins Protokoll; „Zu den NFC-Einstellungen“ öffnet unter Android die NFC-Einstellungen des Systems und tut unter iOS nichts, was das Protokoll als `NFC-Einstellungen geöffnet: nein` meldet.
+
 Unter iOS steht im Abschnitt „PIN, CAN, PUK" zusätzlich der Schalter „NFC-Dialog bei PIN-, CAN- und PUK-Abfrage automatisch schließen". Er ist voreingestellt an und sendet `INTERRUPT`, sobald das SDK nach PIN, CAN, PUK oder neuer PIN fragt. Sonst bleibt der NFC-Dialog des Systems offen, und die App lässt sich darunter nicht bedienen (auf einem iPhone 16 Pro mit iOS 27.2.1 bestätigt). Mehr dazu steht im Abschnitt „Der NFC-Dialog unter iOS und `interrupt()`" der `README.de.md` des Plugins.
 
 Das Protokoll zeigt zu jedem Ereignis die wichtigsten Felder, etwa `retryCounter` oder das Ergebnis einer Authentisierung. Adressen zeigt es nicht, weil sie ein Sitzungs-Token enthalten können, sondern nur, ob eine vorhanden ist.

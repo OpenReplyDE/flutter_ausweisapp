@@ -20,7 +20,7 @@ Future<FakeAusweisAppTransport> _pump(WidgetTester tester) async {
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   final fake = FakeAusweisAppTransport();
-  await tester.pumpWidget(MyApp(transport: fake));
+  await tester.pumpWidget(MyApp(transport: fake, nfc: FakeAusweisAppNfc()));
   return fake;
 }
 

@@ -20,11 +20,12 @@ const _nfcMessages = UserInfoMessages(
 );
 
 /// Root of the example app. In tests, [transport] replaces the native
-/// transport and [webLogin] the web view.
+/// transport, [nfc] the NFC state of the device and [webLogin] the web view.
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, this.transport, this.webLogin});
+  const MyApp({super.key, this.transport, this.nfc, this.webLogin});
 
   final AusweisAppTransport? transport;
+  final AusweisAppNfc? nfc;
   final WebLogin Function()? webLogin;
 
   @override
@@ -32,23 +33,25 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'flutter_ausweisapp example',
       theme: ThemeData(colorSchemeSeed: Colors.indigo),
-      home: TestScreen(transport: transport, webLogin: webLogin),
+      home: TestScreen(transport: transport, nfc: nfc, webLogin: webLogin),
     );
   }
 }
 
 class TestScreen extends StatefulWidget {
-  const TestScreen({super.key, this.transport, this.webLogin});
+  const TestScreen({super.key, this.transport, this.nfc, this.webLogin});
 
   final AusweisAppTransport? transport;
+  final AusweisAppNfc? nfc;
   final WebLogin Function()? webLogin;
 
   @override
   State<TestScreen> createState() => _TestScreenState();
 }
 
-class _TestScreenState extends State<TestScreen> {
+class _TestScreenState extends State<TestScreen> with WidgetsBindingObserver {
   late final AusweisApp _eid;
+  late final AusweisAppNfc _nfc;
   late final StreamSubscription<AusweisAppEvent> _subscription;
   final _urlController = TextEditingController(text: _defaultTcTokenUrl);
   final _linkController = TextEditingController();
@@ -59,6 +62,10 @@ class _TestScreenState extends State<TestScreen> {
   bool _developerMode = true;
   bool _pluginLogging = false;
   bool _autoInterrupt = true;
+
+  /// The last answer of the device; null before the first answer and after
+  /// a failed query.
+  NfcStatus? _nfcStatus;
   String? _linkHint;
   List<String> _optionalRights = const [];
   Set<String> _enabledRights = {};
@@ -82,10 +89,22 @@ class _TestScreenState extends State<TestScreen> {
     );
     // Subscribe before start() so that no event is missed.
     _subscription = _eid.events.listen(_onEvent, onError: _onError);
+    // The NFC state needs no running SDK. It has no change notifications, so
+    // the app asks again whenever it comes back to the foreground, for
+    // example from the NFC settings.
+    _nfc = widget.nfc ?? const MethodChannelAusweisAppNfc();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshNfcStatus());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshNfcStatus());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _subscription.cancel();
     _eid.dispose();
     _urlController.dispose();
@@ -147,6 +166,44 @@ class _TestScreenState extends State<TestScreen> {
       _addLog('Unerwarteter Fehler bei $name: ${e.runtimeType}');
     }
   }
+
+  /// Asks the device for its NFC state. [log] also writes the answer to the
+  /// log; the automatic queries only update the status line.
+  Future<void> _refreshNfcStatus({bool log = false}) async {
+    NfcStatus? status;
+    try {
+      status = await _nfc.status();
+    } on AusweisAppException catch (e) {
+      _addLog('Fehler bei NFC-Status: $e');
+    } on Object catch (e) {
+      _addLog('Unerwarteter Fehler bei NFC-Status: ${e.runtimeType}');
+    }
+    if (!mounted) return;
+    setState(() => _nfcStatus = status);
+    if (log && status != null) {
+      _addLog('NFC-Status: ${_nfcLabel(status)} (${status.name})');
+    }
+  }
+
+  /// Opens the NFC settings of the system. On iOS there are none; the log
+  /// then says that nothing was opened.
+  Future<void> _openNfcSettings() async {
+    try {
+      final opened = await _nfc.openSettings();
+      _addLog('NFC-Einstellungen geöffnet: ${opened ? 'ja' : 'nein'}');
+    } on AusweisAppException catch (e) {
+      _addLog('Fehler bei NFC-Einstellungen: $e');
+    } on Object catch (e) {
+      _addLog('Unerwarteter Fehler bei NFC-Einstellungen: ${e.runtimeType}');
+    }
+  }
+
+  static String _nfcLabel(NfcStatus? status) => switch (status) {
+    NfcStatus.unsupported => 'kein NFC',
+    NfcStatus.disabled => 'ausgeschaltet',
+    NfcStatus.available => 'verfügbar',
+    null => 'unbekannt',
+  };
 
   void _useClientLink() {
     final link = Uri.tryParse(_linkController.text.trim());
@@ -322,6 +379,7 @@ class _TestScreenState extends State<TestScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildSdkSection(),
+          _buildNfcSection(),
           _buildWebLoginSection(),
           _buildAuthSection(),
           _buildSecretSection(),
@@ -349,6 +407,22 @@ class _TestScreenState extends State<TestScreen> {
         value: _pluginLogging,
         onChanged: (v) => setState(() => _pluginLogging = v),
       ),
+    ]);
+  }
+
+  Widget _buildNfcSection() {
+    return _section('NFC', [
+      Text('NFC: ${_nfcLabel(_nfcStatus)}'),
+      _wrap([
+        FilledButton.tonal(
+          onPressed: () => _refreshNfcStatus(log: true),
+          child: const Text('NFC-Status abfragen'),
+        ),
+        FilledButton.tonal(
+          onPressed: _openNfcSettings,
+          child: const Text('Zu den NFC-Einstellungen'),
+        ),
+      ]),
     ]);
   }
 
@@ -539,6 +613,7 @@ String _describe(AusweisAppEvent event) {
       if (result.major != null) 'major: ${result.major}',
       if (result.minor != null) 'minor: ${result.minor}',
       if (result.reason != null) 'reason: ${result.reason}',
+      if (result.failureKind case final kind?) 'failureKind: ${kind.name}',
       'URL: ${result.url == null ? 'keine' : 'vorhanden'}',
     ],
     AccessRightsRequested(error: final text) => error(text),
@@ -551,9 +626,10 @@ String _describe(AusweisAppEvent event) {
       error: final text,
     ) => [...reader(r), ...error(text)],
     Paused(:final cause) => ['cause: $cause'],
-    ChangePinCompleted(:final success, :final reason) => [
+    ChangePinCompleted(:final success, :final reason, :final failureKind) => [
       'success: $success',
       if (reason != null) 'reason: $reason',
+      if (failureKind != null) 'failureKind: ${failureKind.name}',
     ],
     CertificateReceived(:final certificate) => [
       if (certificate.subjectName != null)
