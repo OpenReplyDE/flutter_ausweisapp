@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
 
+import 'web_login.dart';
+
 void main() => runApp(const MyApp());
 
 const _defaultTcTokenUrl =
@@ -17,26 +19,29 @@ const _nfcMessages = UserInfoMessages(
   sessionInProgress: 'Ausweis wird gelesen. Nicht bewegen.',
 );
 
-/// Root of the example app. [transport] replaces the native one in tests.
+/// Root of the example app. In tests, [transport] replaces the native
+/// transport and [webLogin] the web view.
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, this.transport});
+  const MyApp({super.key, this.transport, this.webLogin});
 
   final AusweisAppTransport? transport;
+  final WebLogin Function()? webLogin;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'flutter_ausweisapp example',
       theme: ThemeData(colorSchemeSeed: Colors.indigo),
-      home: TestScreen(transport: transport),
+      home: TestScreen(transport: transport, webLogin: webLogin),
     );
   }
 }
 
 class TestScreen extends StatefulWidget {
-  const TestScreen({super.key, this.transport});
+  const TestScreen({super.key, this.transport, this.webLogin});
 
   final AusweisAppTransport? transport;
+  final WebLogin Function()? webLogin;
 
   @override
   State<TestScreen> createState() => _TestScreenState();
@@ -47,6 +52,7 @@ class _TestScreenState extends State<TestScreen> {
   late final StreamSubscription<AusweisAppEvent> _subscription;
   final _urlController = TextEditingController(text: _defaultTcTokenUrl);
   final _linkController = TextEditingController();
+  final _loginUrlController = TextEditingController();
   final _secretController = TextEditingController();
   final List<String> _log = [];
 
@@ -56,6 +62,14 @@ class _TestScreenState extends State<TestScreen> {
   String? _linkHint;
   List<String> _optionalRights = const [];
   Set<String> _enabledRights = {};
+
+  /// The browser session of the web login, created on first use.
+  WebLogin? _web;
+  bool _webPageOpen = false;
+
+  /// True while an authentication runs that the web page asked for; its
+  /// return address then goes back into the browser session.
+  bool _webLoginPending = false;
 
   @override
   void initState() {
@@ -76,6 +90,7 @@ class _TestScreenState extends State<TestScreen> {
     _eid.dispose();
     _urlController.dispose();
     _linkController.dispose();
+    _loginUrlController.dispose();
     _secretController.dispose();
     super.dispose();
   }
@@ -99,6 +114,9 @@ class _TestScreenState extends State<TestScreen> {
       default:
     }
     _addLog('Ereignis: ${_describe(event)}');
+    if (event case AuthenticationCompleted(:final result)) {
+      _finishWebLogin(result);
+    }
     // By the SDK documentation, the iOS NFC dialog stays open after the SDK
     // asks for input; INTERRUPT closes it so that the input can be made.
     final asksForInput = switch (event) {
@@ -144,7 +162,103 @@ class _TestScreenState extends State<TestScreen> {
     });
   }
 
-  void _startAuthentication() {
+  /// Opens the login address in the browser session of the example app.
+  void _openWebLogin() {
+    final url = Uri.tryParse(_loginUrlController.text.trim());
+    if (url == null || !url.isAbsolute || url.host.isEmpty) {
+      _addLog('Ungültige Login-Adresse: bitte eine absolute Adresse angeben.');
+      return;
+    }
+    final web = _web ??= (widget.webLogin ?? WebViewLogin.new)();
+    web.onNavigation = _onWebNavigation;
+    unawaited(web.load(url));
+    _showWebPage();
+  }
+
+  void _showWebPage() {
+    final web = _web;
+    if (web == null || _webPageOpen) return;
+    _webPageOpen = true;
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Anmeldung im Browser')),
+              body: web.buildView(),
+            ),
+          ),
+        )
+        .whenComplete(() => _webPageOpen = false);
+  }
+
+  /// Takes an eID client link over from the web page: closes the page and
+  /// starts the authentication with the tcTokenURL of the link. Addresses
+  /// are not logged, because they carry session tokens.
+  bool _onWebNavigation(Uri url) {
+    final tcTokenUrl = tcTokenUrlFromEidClientLink(url);
+    if (tcTokenUrl == null) return _onAppRedirect(url);
+    if (_webPageOpen) Navigator.of(context).pop();
+    _urlController.text = tcTokenUrl.toString();
+    _webLoginPending = true;
+    _addLog('eID-Client-Link aus dem Browser übernommen.');
+    unawaited(_startAuthenticationFromWeb());
+    return true;
+  }
+
+  /// Schemes that a web page opens itself. Everything else is a redirect to
+  /// an app, which a web view cannot follow.
+  static const _webSchemes = {'http', 'https', 'about', 'data', 'blob'};
+
+  /// A login ends in a redirect to the scheme of the app that asked for it
+  /// (for example `de.example.app:/oauth2redirect?code=…`). The example
+  /// only reports it: it logs the scheme and the names of the parameters,
+  /// never their values, and closes the web page.
+  bool _onAppRedirect(Uri url) {
+    if (_webSchemes.contains(url.scheme)) return false;
+    if (_webPageOpen) Navigator.of(context).pop();
+    final names = url.queryParameters.keys.toList()..sort();
+    _addLog(
+      'Weiterleitung an eine App empfangen '
+      '(Schema: ${url.scheme}, Parameter: ${names.join(', ')}).',
+    );
+    return true;
+  }
+
+  Future<void> _startAuthenticationFromWeb() async {
+    if (!_eid.isRunning) await _run('Start', _eid.start);
+    if (!mounted) return;
+    // A login in the browser belongs to a real service, and the SDK refuses
+    // a real service in developer mode. The switch is for the test service.
+    _startAuthentication(developerMode: false);
+  }
+
+  /// Opens the return address of an authentication that the web page asked
+  /// for in the same browser session, so that the service can finish the
+  /// login there.
+  ///
+  /// After a failed authentication the app stays on the log, so that the
+  /// reason remains visible, and leaves the return address unopened.
+  void _finishWebLogin(AuthResult result) {
+    if (!_webLoginPending) return;
+    _webLoginPending = false;
+    final web = _web;
+    final returnUrl = result.url;
+    if (web == null || returnUrl == null) return;
+    if (!result.isSuccess) {
+      _addLog(
+        'Authentisierung gescheitert: Die Rückkehr-Adresse wurde nicht '
+        'geöffnet, der Grund steht in der Zeile darunter.',
+      );
+      return;
+    }
+    unawaited(web.load(returnUrl));
+    _addLog('Rückkehr-Adresse im Browser geöffnet.');
+    _showWebPage();
+  }
+
+  /// Starts the authentication with the address in the tcTokenURL field.
+  /// [developerMode] defaults to the switch.
+  void _startAuthentication({bool? developerMode}) {
     final url = Uri.tryParse(_urlController.text.trim());
     if (url == null || !url.isAbsolute || url.host.isEmpty) {
       _addLog('Ungültige tcTokenURL: bitte eine absolute Adresse angeben.');
@@ -154,7 +268,7 @@ class _TestScreenState extends State<TestScreen> {
       'RUN_AUTH',
       () => _eid.startAuthentication(
         tcTokenUrl: url,
-        developerMode: _developerMode,
+        developerMode: developerMode ?? _developerMode,
         userInfoMessages: _nfcMessages,
       ),
     );
@@ -208,6 +322,7 @@ class _TestScreenState extends State<TestScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildSdkSection(),
+          _buildWebLoginSection(),
           _buildAuthSection(),
           _buildSecretSection(),
           _buildCommandSection(),
@@ -234,6 +349,32 @@ class _TestScreenState extends State<TestScreen> {
         value: _pluginLogging,
         onChanged: (v) => setState(() => _pluginLogging = v),
       ),
+    ]);
+  }
+
+  Widget _buildWebLoginSection() {
+    return _section('Anmeldung im Browser', [
+      TextField(
+        key: const Key('loginUrlField'),
+        controller: _loginUrlController,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        decoration: const InputDecoration(
+          labelText: 'Login-Adresse',
+          helperText:
+              'Öffnet den Login eines Dienstes. Der eID-Client-Link der '
+              'Seite startet die Authentisierung, immer ohne '
+              'Entwicklermodus.',
+          helperMaxLines: 4,
+        ),
+      ),
+      const SizedBox(height: 8),
+      _wrap([
+        FilledButton.tonal(
+          onPressed: _openWebLogin,
+          child: const Text('Im Browser anmelden'),
+        ),
+      ]),
     ]);
   }
 
