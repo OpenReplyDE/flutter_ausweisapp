@@ -54,6 +54,10 @@ With the section "Anmeldung im Browser" (login in the browser), you test the flo
 
 Login in the browser always starts the authentication without developer mode, regardless of the switch: the SDK immediately rejects a production service in developer mode. The switch applies only to "Authentisierung starten".
 
+The web view presents itself to the page as the system browser (Safari on iOS, Chrome on Android), because some services check the browser and turn a web view away; ELSTER, for example, then shows "Nicht unterstützter Browser" (unsupported browser). The guide in `docs/integration.md` describes this under "Services that check the browser".
+
+If the page links to another app, as ELSTER does for a login with ElsterSecure (scheme `elster-secure`), the example app hands the link to the system and leaves the web view open. The log shows `Link an eine andere App übergeben` (link handed to another app) with the scheme and the names of the parameters. After the confirmation in the other app, the page continues in the web view. The example app tells this case from step 6 by the login address: the scheme of its `redirect_uri` parameter counts as the end of the login, and every other app scheme goes to the system. If no app takes the link, the example app reports it as in step 6.
+
 The app recognizes the start of the ID client by a link of the form `…/eID-Client?tcTokenURL=https://…`. If a service starts the client in another way, the takeover does not work; whether a particular service permits this route must be clarified with its operator.
 
 The web view is only a helper of the example app. The plugin itself contains no web view; in your app, you build this part yourself.

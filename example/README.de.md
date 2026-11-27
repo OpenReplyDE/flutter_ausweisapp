@@ -54,6 +54,10 @@ Mit dem Abschnitt „Anmeldung im Browser“ prüfen Sie den Ablauf gegen einen 
 
 Die Anmeldung im Browser startet die Authentisierung immer ohne Entwicklermodus, unabhängig vom Schalter: Das SDK lehnt einen Produktivdienst im Entwicklermodus sofort ab. Der Schalter gilt nur für „Authentisierung starten“.
 
+Die Web-Ansicht gibt sich der Seite gegenüber als Systembrowser aus (Safari unter iOS, Chrome unter Android), weil manche Dienste den Browser prüfen und eine Web-Ansicht abweisen; ELSTER zeigt dann zum Beispiel „Nicht unterstützter Browser“. Der Leitfaden in `docs/integration.de.md` beschreibt das unter „Dienste, die den Browser prüfen“.
+
+Verlinkt die Seite eine andere App, wie ELSTER für einen Login mit ElsterSecure (Schema `elster-secure`), übergibt die Beispiel-App den Link an das System und lässt die Web-Ansicht offen. Das Protokoll zeigt `Link an eine andere App übergeben` mit dem Schema und den Namen der Parameter. Nach der Bestätigung in der anderen App läuft die Seite in der Web-Ansicht weiter. Die Beispiel-App unterscheidet diesen Fall von Schritt 6 anhand der Login-Adresse: Das Schema ihres Parameters `redirect_uri` gilt als Ende des Logins, jedes andere App-Schema geht an das System. Nimmt keine App den Link an, meldet die Beispiel-App ihn wie in Schritt 6.
+
 Die App erkennt den Start des Ausweis-Clients an einem Link der Form `…/eID-Client?tcTokenURL=https://…`. Startet ein Dienst den Client auf anderem Weg, greift die Übernahme nicht; ob ein bestimmter Dienst diesen Weg zulässt, müssen Sie mit dessen Betreiber klären.
 
 Die Web-Ansicht ist nur ein Hilfsmittel der Beispiel-App. Das Plugin selbst enthält keine Web-Ansicht; in Ihrer App bauen Sie diesen Teil selbst.

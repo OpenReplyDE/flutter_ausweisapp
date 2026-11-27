@@ -55,12 +55,13 @@ Plugins der App, die noch kein Swift Package anbieten, bindet Flutter weiterhin 
 
 ## 3. Den Login-Ablauf bauen
 
-Die folgende Klasse enthält den ganzen Ablauf. Sie braucht neben dem Plugin das Paket `webview_flutter`. Die Callbacks stehen für die eigenen Screens der App und für ihren bestehenden Token-Tausch.
+Die folgende Klasse enthält den ganzen Ablauf. Sie braucht neben dem Plugin die Pakete `webview_flutter` und `url_launcher`. Die Callbacks stehen für die eigenen Screens der App und für ihren bestehenden Token-Tausch.
 
 ```dart
 import 'dart:async';
 
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 enum EidInput { pin, can, puk }
@@ -77,6 +78,7 @@ class EidLoginFlow {
     required this.onRedirect,
     required this.onNfcUnavailable,
     required this.onFailed,
+    this.appSchemes = const {},
     this.nfc = const MethodChannelAusweisAppNfc(),
   });
 
@@ -105,6 +107,10 @@ class EidLoginFlow {
   /// Die Authentisierung ist gescheitert oder wurde abgebrochen. [kind]
   /// bestimmt den Text; [code] ist der rohe Code für den Support.
   final void Function(FailureKind kind, String? code) onFailed;
+
+  /// Die Schemas anderer Apps, die die Login-Seite öffnen darf, zum Beispiel
+  /// `elster-secure` für einen Login mit ElsterSecure.
+  final Set<String> appSchemes;
 
   /// Der NFC-Zustand des Geräts; Tests übergeben ein `FakeAusweisAppNfc`.
   final AusweisAppNfc nfc;
@@ -138,6 +144,12 @@ class EidLoginFlow {
     // Die Login-Seite ist fertig und leitet an die App weiter.
     if (url.scheme == redirectScheme) {
       onRedirect(url);
+      return NavigationDecision.prevent;
+    }
+
+    // Die Seite verlinkt eine andere App: Das System öffnet sie, die Seite bleibt.
+    if (appSchemes.contains(url.scheme)) {
+      unawaited(launchUrl(url, mode: LaunchMode.externalApplication));
       return NavigationDecision.prevent;
     }
     return NavigationDecision.navigate;
@@ -191,6 +203,64 @@ class EidLoginFlow {
 Zeigen Sie die Web-Ansicht mit `WebViewWidget(controller: flow.web)`, solange die Nutzerin oder der Nutzer auf der Login-Seite ist, und die eigenen Screens der App, solange das SDK arbeitet. Setzen Sie `developerMode` für einen Produktivdienst nicht; das SDK lehnt ihn dort ab.
 
 Die Klasse fragt den NFC-Zustand in dem Moment ab, in dem die Seite den Ausweis-Schritt startet. Hat das Gerät kein NFC oder ist NFC ausgeschaltet, startet sie die Authentisierung nicht, und die Web-Ansicht bleibt auf der Login-Seite. Zeigen Sie bei `NfcStatus.disabled` einen Knopf, der `flow.nfc.openSettings()` aufruft; ist NFC eingeschaltet, wählt die Nutzerin oder der Nutzer den Ausweis auf der Seite erneut. `flow.start()` reicht die `AusweisAppStartException` von `eid.start()` durch; ihr `failureKind` ist `timeout` oder `other`.
+
+### Dienste, die den Browser prüfen
+
+Manche Dienste prüfen den Browser auf dem Server und weisen eine Web-Ansicht ab. ELSTER, das auch den Login von „Mein Unternehmenskonto“ betreibt, zeigt dann statt der Login-Seite seinen Konfigurations-Assistenten mit „Nicht unterstützter Browser“. Der Grund ist der User-Agent der Web-Ansicht: Unter iOS fehlen ihm die Angaben `Version/…` und `Safari/…`, die Safari sendet, und unter Android enthält er `Version/4.0`, was die Prüfung als sehr alten Safari liest.
+
+Muss die App mit einem solchen Dienst funktionieren, geben Sie der Web-Ansicht den User-Agent des Systembrowsers. Diese Funktion wandelt ihn um:
+
+```dart
+import 'dart:io' show Platform;
+
+/// Macht aus dem User-Agent einer Web-Ansicht den des Systembrowsers.
+String browserUserAgent(String userAgent, {required String osVersion}) {
+  if (userAgent.contains('Chrome/')) {
+    return userAgent.replaceFirst(RegExp(r' Version/[\d.]+'), '');
+  }
+  if (!userAgent.contains('AppleWebKit/') || userAgent.contains('Safari/')) {
+    return userAgent;
+  }
+  final version = RegExp(r'\d+\.\d+').firstMatch(osVersion)?.group(0);
+  if (version == null) return userAgent;
+  // Safari nennt die Version vor der Angabe Mobile, die einem iPad fehlt.
+  final mobile = userAgent.indexOf(' Mobile/');
+  final end = mobile < 0 ? userAgent.length : mobile;
+  return '${userAgent.substring(0, end)} Version/$version'
+      '${userAgent.substring(end)} Safari/604.1';
+}
+```
+
+Setzen Sie ihn in `start()`, bevor die erste Seite lädt:
+
+```dart
+    final userAgent = await web.getUserAgent();
+    if (userAgent != null) {
+      await web.setUserAgent(
+        browserUserAgent(userAgent, osVersion: Platform.operatingSystemVersion),
+      );
+    }
+    await web.loadRequest(loginUrl);
+```
+
+Ein Dienst kann Web-Ansichten absichtlich abweisen. Klären Sie mit dessen Betreiber, ob er einen Login in einer Web-Ansicht zulässt.
+
+### Login-Verfahren, die eine andere App nutzen
+
+Manche Login-Verfahren laufen in einer anderen App weiter. Für einen Login mit ElsterSecure öffnet die Seite von ELSTER einen Link mit dem Schema `elster-secure`, die Nutzerin oder der Nutzer bestätigt den Login in der ElsterSecure-App, und danach läuft die Seite weiter. Eine Web-Ansicht folgt einem solchen Link nicht von selbst, auf der Seite passiert also nichts.
+
+Die Klasse oben übergibt die Schemas aus `appSchemes` mit `launchUrl` aus dem Paket `url_launcher` an das System. Die Web-Ansicht lässt sie offen, weil die Seite dort auf die Bestätigung wartet:
+
+```dart
+final flow = EidLoginFlow(
+  // …
+  appSchemes: {'elster-secure'},
+);
+```
+
+Nennen Sie die Schemas ausdrücklich, statt jedes unbekannte Schema zu übergeben; sonst entscheidet die Login-Seite, welche Apps Ihre App öffnet. `launchUrl` liefert `false`, wenn keine App den Link annimmt. Die Klasse wertet das nicht aus; zeigen Sie an dieser Stelle einen Hinweis, wenn Ihre App einen braucht.
+
+Ein Login mit ElsterSecure braucht diese Übergabe und den User-Agent aus dem vorigen Abschnitt. Beobachtet auf einem iPhone mit iOS 27.2.1: Mit beidem funktioniert der Login mit ElsterSecure in der Beispiel-App. Android ist nicht getestet.
 
 ## 4. Den Login abschließen
 

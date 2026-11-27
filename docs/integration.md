@@ -55,12 +55,13 @@ Plugins of the app that do not offer a Swift package yet keep being integrated t
 
 ## 3. Build the login flow
 
-The following class contains the whole flow. It needs `webview_flutter` in addition to the plugin. The callbacks stand for the app's own screens and for its existing token exchange.
+The following class contains the whole flow. It needs the packages `webview_flutter` and `url_launcher` in addition to the plugin. The callbacks stand for the app's own screens and for its existing token exchange.
 
 ```dart
 import 'dart:async';
 
 import 'package:flutter_ausweisapp/flutter_ausweisapp.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 enum EidInput { pin, can, puk }
@@ -76,6 +77,7 @@ class EidLoginFlow {
     required this.onRedirect,
     required this.onNfcUnavailable,
     required this.onFailed,
+    this.appSchemes = const {},
     this.nfc = const MethodChannelAusweisAppNfc(),
   });
 
@@ -104,6 +106,10 @@ class EidLoginFlow {
   /// The authentication failed or was cancelled. [kind] chooses the text;
   /// [code] is the raw code for support.
   final void Function(FailureKind kind, String? code) onFailed;
+
+  /// The schemes of other apps that the login page may open, for example
+  /// `elster-secure` for a login with ElsterSecure.
+  final Set<String> appSchemes;
 
   /// The NFC state of the device; tests pass a `FakeAusweisAppNfc`.
   final AusweisAppNfc nfc;
@@ -137,6 +143,12 @@ class EidLoginFlow {
     // The login page is done and redirects to the app.
     if (url.scheme == redirectScheme) {
       onRedirect(url);
+      return NavigationDecision.prevent;
+    }
+
+    // The page links to another app: the system opens it, the page stays.
+    if (appSchemes.contains(url.scheme)) {
+      unawaited(launchUrl(url, mode: LaunchMode.externalApplication));
       return NavigationDecision.prevent;
     }
     return NavigationDecision.navigate;
@@ -189,6 +201,64 @@ class EidLoginFlow {
 Show the web view with `WebViewWidget(controller: flow.web)` while the user is on the login page, and the app's own screens while the SDK is working. Do not set `developerMode` for a production service; the SDK rejects it there.
 
 The class asks for the NFC state at the moment the page starts the eID step. If the device has no NFC or NFC is switched off, it does not start the authentication, and the web view stays on the login page. On `NfcStatus.disabled`, show a button that calls `flow.nfc.openSettings()`; once NFC is on, the user chooses the eID on the page again. `flow.start()` passes on the `AusweisAppStartException` of `eid.start()`; its `failureKind` is `timeout` or `other`.
+
+### Services that check the browser
+
+Some services check the browser on the server and turn a web view away. ELSTER, which also runs the login of "Mein Unternehmenskonto", shows its configuration assistant with "Nicht unterstützter Browser" (unsupported browser) instead of the login page. The reason is the user agent of the web view: on iOS, it lacks the tokens `Version/…` and `Safari/…` that Safari sends, and on Android, it carries `Version/4.0`, which the check reads as a very old Safari.
+
+If the app has to work with such a service, give the web view the user agent of the system browser. This function converts it:
+
+```dart
+import 'dart:io' show Platform;
+
+/// Turns the user agent of a web view into that of the system browser.
+String browserUserAgent(String userAgent, {required String osVersion}) {
+  if (userAgent.contains('Chrome/')) {
+    return userAgent.replaceFirst(RegExp(r' Version/[\d.]+'), '');
+  }
+  if (!userAgent.contains('AppleWebKit/') || userAgent.contains('Safari/')) {
+    return userAgent;
+  }
+  final version = RegExp(r'\d+\.\d+').firstMatch(osVersion)?.group(0);
+  if (version == null) return userAgent;
+  // Safari names the version before the Mobile token, which an iPad lacks.
+  final mobile = userAgent.indexOf(' Mobile/');
+  final end = mobile < 0 ? userAgent.length : mobile;
+  return '${userAgent.substring(0, end)} Version/$version'
+      '${userAgent.substring(end)} Safari/604.1';
+}
+```
+
+In `start()`, set it before the first page loads:
+
+```dart
+    final userAgent = await web.getUserAgent();
+    if (userAgent != null) {
+      await web.setUserAgent(
+        browserUserAgent(userAgent, osVersion: Platform.operatingSystemVersion),
+      );
+    }
+    await web.loadRequest(loginUrl);
+```
+
+A service may turn web views away on purpose. Clarify with its operator whether it permits a login in a web view.
+
+### Login methods that use another app
+
+Some login methods continue in another app. For a login with ElsterSecure, the page of ELSTER opens a link with the scheme `elster-secure`, the user confirms the login in the ElsterSecure app, and the page then continues. A web view does not follow such a link by itself, so nothing happens on the page.
+
+The class above hands the schemes in `appSchemes` to the system with `launchUrl` from the package `url_launcher`. It leaves the web view open, because the page waits there for the confirmation:
+
+```dart
+final flow = EidLoginFlow(
+  // …
+  appSchemes: {'elster-secure'},
+);
+```
+
+Name the schemes explicitly instead of handing over every unknown scheme; otherwise the login page decides which apps your app opens. `launchUrl` returns `false` if no app takes the link. The class ignores that; show a hint at this point if your app needs one.
+
+A login with ElsterSecure needs this handover and the user agent from the previous section. Observed on an iPhone with iOS 27.2.1: with both, the login with ElsterSecure works in the example app. Android has not been tested.
 
 ## 4. Complete the login
 
