@@ -78,6 +78,9 @@ class _TestScreenState extends State<TestScreen> with WidgetsBindingObserver {
   /// return address then goes back into the browser session.
   bool _webLoginPending = false;
 
+  /// The scheme of `redirect_uri` in the login address, if it names one.
+  String? _redirectScheme;
+
   @override
   void initState() {
     super.initState();
@@ -228,6 +231,8 @@ class _TestScreenState extends State<TestScreen> with WidgetsBindingObserver {
     }
     final web = _web ??= (widget.webLogin ?? WebViewLogin.new)();
     web.onNavigation = _onWebNavigation;
+    final redirect = Uri.tryParse(url.queryParameters['redirect_uri'] ?? '');
+    _redirectScheme = redirect?.scheme;
     unawaited(web.load(url));
     _showWebPage();
   }
@@ -267,18 +272,38 @@ class _TestScreenState extends State<TestScreen> with WidgetsBindingObserver {
   static const _webSchemes = {'http', 'https', 'about', 'data', 'blob'};
 
   /// A login ends in a redirect to the scheme of the app that asked for it
-  /// (for example `de.example.app:/oauth2redirect?code=…`). The example
-  /// only reports it: it logs the scheme and the names of the parameters,
-  /// never their values, and closes the web page.
+  /// (for example `de.example.app:/oauth2redirect?code=…`), which the login
+  /// address names in `redirect_uri`. Before that, a page may link to
+  /// another app, as ELSTER does with ElsterSecure; such a link goes to
+  /// that app, and the web page stays open for the way back.
   bool _onAppRedirect(Uri url) {
     if (_webSchemes.contains(url.scheme)) return false;
-    if (_webPageOpen) Navigator.of(context).pop();
-    final names = url.queryParameters.keys.toList()..sort();
-    _addLog(
-      'Weiterleitung an eine App empfangen '
-      '(Schema: ${url.scheme}, Parameter: ${names.join(', ')}).',
-    );
+    if (url.scheme == _redirectScheme) {
+      _reportAppRedirect(url);
+    } else {
+      unawaited(_openInApp(url));
+    }
     return true;
+  }
+
+  Future<void> _openInApp(Uri url) async {
+    final opened = await _web?.openInApp(url) ?? false;
+    if (!mounted) return;
+    if (!opened) return _reportAppRedirect(url);
+    _addLog('Link an eine andere App übergeben (${_schemeAndNames(url)}).');
+  }
+
+  /// The example only reports the redirect to the app that asked for the
+  /// login: it closes the web page and logs the scheme and the names of the
+  /// parameters, never their values.
+  void _reportAppRedirect(Uri url) {
+    if (_webPageOpen) Navigator.of(context).pop();
+    _addLog('Weiterleitung an eine App empfangen (${_schemeAndNames(url)}).');
+  }
+
+  static String _schemeAndNames(Uri url) {
+    final names = url.queryParameters.keys.toList()..sort();
+    return 'Schema: ${url.scheme}, Parameter: ${names.join(', ')}';
   }
 
   Future<void> _startAuthenticationFromWeb() async {

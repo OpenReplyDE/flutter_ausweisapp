@@ -19,6 +19,16 @@ class _FakeWebLogin implements WebLogin {
   @override
   Future<void> load(Uri url) async => loaded.add(url);
 
+  /// Whether another app takes the links this session hands over.
+  bool appInstalled = false;
+  final handedOver = <Uri>[];
+
+  @override
+  Future<bool> openInApp(Uri url) async {
+    handedOver.add(url);
+    return appInstalled;
+  }
+
   @override
   Widget buildView() => const Text('web view');
 }
@@ -192,6 +202,60 @@ void main() {
       );
       expect(_inLog('s3cr3t'), findsNothing);
       expect(_inLog('xyz789'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a link to another app is handed over and the web page stays open',
+    (tester) async {
+      final (transport, web) = await _pump(tester);
+      web.appInstalled = true;
+      await _openBrowser(tester);
+      final link = Uri.parse('elster-secure://login?initApp=1&p=s3cr3t');
+
+      final handled = web.onNavigation!(link);
+      await tester.pumpAndSettle();
+
+      expect(handled, isTrue);
+      expect(web.handedOver, [link]);
+      expect(find.text('web view'), findsOneWidget);
+      expect(transport.sent, isEmpty);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(
+        _inLog(
+          'Link an eine andere App übergeben '
+          '(Schema: elster-secure, Parameter: initApp, p)',
+        ),
+        findsOneWidget,
+      );
+      expect(_inLog('s3cr3t'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the redirect address of the login is reported and never handed over',
+    (tester) async {
+      final (_, web) = await _pump(tester);
+      web.appInstalled = true;
+      await _openBrowser(
+        tester,
+        '$_loginUrl&redirect_uri='
+        '${Uri.encodeQueryComponent('de.example.app:/oauth2redirect')}',
+      );
+
+      web.onNavigation!(Uri.parse('de.example.app:/oauth2redirect?code=1'));
+      await tester.pumpAndSettle();
+
+      expect(web.handedOver, isEmpty);
+      expect(find.text('web view'), findsNothing);
+      expect(
+        _inLog(
+          'Weiterleitung an eine App empfangen '
+          '(Schema: de.example.app, Parameter: code)',
+        ),
+        findsOneWidget,
+      );
     },
   );
 

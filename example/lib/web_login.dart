@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 /// A browser session inside the example app.
@@ -16,6 +17,10 @@ abstract interface class WebLogin {
 
   /// Opens [url] in this session.
   Future<void> load(Uri url);
+
+  /// Hands [url] to the app that is registered for its scheme, as a browser
+  /// does with a link to another app. Returns false when no app takes it.
+  Future<bool> openInApp(Uri url);
 
   /// The widget that shows the page.
   Widget buildView();
@@ -80,6 +85,15 @@ class WebViewLogin implements WebLogin {
   Future<void> load(Uri url) async {
     await _browserUserAgent;
     await _controller.loadRequest(url);
+  }
+
+  @override
+  Future<bool> openInApp(Uri url) async {
+    try {
+      return await launchUrl(url, mode: LaunchMode.externalApplication);
+    } on Exception {
+      return false;
+    }
   }
 
   @override
