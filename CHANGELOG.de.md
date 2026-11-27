@@ -2,6 +2,16 @@
 
 English version: [CHANGELOG.md](CHANGELOG.md)
 
+## 0.2.1
+
+Für Logins, die den Browser prüfen oder in einer anderen App weiterlaufen, zum Beispiel ELSTER mit ElsterSecure. Es ändern sich nur die Beispiel-App und die Dokumentation; das Plugin selbst bleibt unverändert.
+
+- Die Web-Ansicht der Beispiel-App gibt sich einer Seite gegenüber als Systembrowser aus (Safari unter iOS, Chrome unter Android). ELSTER, das auch den Login von „Mein Unternehmenskonto“ betreibt, weist sie sonst mit „Nicht unterstützter Browser“ ab.
+- Die Beispiel-App übergibt Links für andere Apps, zum Beispiel `elster-secure`, an das System und lässt die Web-Ansicht offen. Das Schema von `redirect_uri` in der Login-Adresse gilt weiterhin als Ende des Logins.
+- Der Integrationsleitfaden beschreibt beides in den Abschnitten „Dienste, die den Browser prüfen“ und „Login-Verfahren, die eine andere App nutzen“; `EidLoginFlow` bekommt den Parameter `appSchemes`.
+
+Ein Login mit ElsterSecure ist auf einem iPhone mit iOS 27.2.1 bestätigt. Unter Android sind beide Änderungen ungetestet.
+
 ## 0.2.0
 
 Ergänzungen für Apps, die eigene Screens zeigen. Nichts Bestehendes ändert sich.

@@ -39,7 +39,7 @@ dependencies:
   flutter_ausweisapp:
     git:
       url: https://github.com/OpenReplyDE/flutter_ausweisapp.git
-      ref: v0.2.0
+      ref: v0.2.1
 ```
 
 The repository is public, so build machines need no access setup. Pin a tag rather than a branch, so that a build does not change without a change in your `pubspec.yaml`.
